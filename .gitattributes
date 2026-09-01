@@ -1,0 +1,8 @@
+# Normalize project text to LF on every platform.
+* text=auto eol=lf
+
+# Keep Windows launchers usable while treating carriage returns as line endings.
+*.bat text eol=crlf whitespace=cr-at-eol
+
+*.png binary
+*.jar binary

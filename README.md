@@ -60,9 +60,11 @@ A cutting can spend weeks moving from fresh cut to callus, roots, transfer, and 
 
 ## Platforms and technology
 
-The planned MVP uses **Flutter/Dart** for Android and iOS, with a shared domain layer and native accessibility semantics. **Drift over SQLite** is planned for structured local data, **Riverpod** for explicit application state, platform notification adapters for reminders, and app-private copied media rather than fragile references to the user's photo library.
+The mobile shell uses **Flutter 3.47.2 / Dart 3.13.2** for Android and iOS, with a shared domain layer and native accessibility semantics. The exact Flutter version is recorded in `.flutter-version`, constrained in `pubspec.yaml`, and pinned in CI. **Drift over SQLite** is planned for structured local data, **Riverpod** for explicit application state, platform notification adapters for reminders, and app-private copied media rather than fragile references to the user's photo library.
 
 Android is the first packaging target because it is straightforward to test and distribute; iOS remains a first-class target and must pass equivalent domain, accessibility, backup, and restore tests.
+
+Source code follows explicit `domain`, `application`, `data`, `features`, and `platform` boundaries under `lib/src/`. See [docs/architecture.md](docs/architecture.md) for dependency rules and responsibilities.
 
 ## Local data model
 
@@ -102,7 +104,7 @@ Cutting Log is a personal observation journal, not a botanical diagnostic, treat
 
 ## Status and milestones
 
-**Current status: documentation scaffold only.** No Flutter project, executable application, database, automated test result, signed package, screenshot, or store release exists yet.
+**Current status: reproducible Flutter shell.** The repository contains an offline, account-free app shell, repository-owned unit/widget tests, and Android/iOS CI build jobs. Persistence, complete product workflows, signed packages, physical-device evidence, screenshots, and store releases do not exist yet.
 
 1. Bootstrap Flutter packages and CI.
 2. Implement the event-based local domain and persistence layer.
@@ -113,20 +115,22 @@ Cutting Log is a personal observation journal, not a botanical diagnostic, treat
 
 See [PLAN.md](PLAN.md) and the issue tracker for executable work.
 
-## Development quickstart (planned)
+## Development quickstart
 
-The application skeleton has not been created. After the bootstrap issue lands, the intended workflow will be:
+Install the exact Flutter SDK version shown in `.flutter-version` (Flutter 3.47.2, which bundles Dart 3.13.2), then run:
 
 ```bash
-flutter pub get
-flutter analyze
-flutter test
-flutter build apk --debug
-# On a configured macOS runner:
-flutter build ios --simulator
+./tool/bootstrap.sh
+./tool/check.sh
+./tool/build_android.sh
+
+# On macOS with a supported Xcode installation:
+./tool/build_ios.sh
 ```
 
-Pinned Flutter/Dart versions and exact setup commands will be committed with the skeleton; do not treat these planned commands as current build evidence.
+`tool/bootstrap.sh` rejects a mismatched Flutter version and requires the committed package lock before resolving packages. `tool/check.sh` enforces formatting, runs `flutter analyze`, and runs the unit/widget suite. The platform build scripts produce a debug APK and an unsigned iOS simulator app respectively.
+
+GitHub Actions runs those equivalent checks for every pull request and push to `main`. CI uploads short-lived Android debug and iOS simulator artifacts; they are development evidence, not signed release packages or physical-device results.
 
 ## License
 

@@ -1,0 +1,20 @@
+name: cutting_log
+description: A local-first, account-free plant cutting observation journal.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.13.2 <3.14.0'
+  flutter: '>=3.47.2 <3.48.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: 6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
