@@ -60,7 +60,7 @@ A cutting can spend weeks moving from fresh cut to callus, roots, transfer, and 
 
 ## Platforms and technology
 
-The mobile shell uses **Flutter 3.47.2 / Dart 3.13.2** for Android and iOS, with a shared domain layer and native accessibility semantics. The exact Flutter version is recorded in `.flutter-version`, constrained in `pubspec.yaml`, and pinned in CI. **Drift over SQLite** is planned for structured local data, **Riverpod** for explicit application state, platform notification adapters for reminders, and app-private copied media rather than fragile references to the user's photo library.
+The mobile shell uses **Flutter 3.47.2 / Dart 3.13.2** for Android and iOS, with a shared domain layer and native accessibility semantics. The exact Flutter version is recorded in `.flutter-version`, constrained in `pubspec.yaml`, and pinned in CI. **Drift over SQLite** provides versioned structured local data, **Riverpod** is planned for explicit application state, platform notification adapters will handle reminders, and media will be copied into app-private storage rather than kept as fragile references to the user's photo library.
 
 Android is the first packaging target because it is straightforward to test and distribute; iOS remains a first-class target and must pass equivalent domain, accessibility, backup, and restore tests.
 
@@ -76,7 +76,7 @@ The initial model is intentionally small:
 - `MediaAsset`: stable ID, event ID, app-private relative path, content hash, caption, capture/import metadata
 - `Reminder`: stable ID, cutting ID, local schedule, status, and platform notification identifier
 
-Current state is derived from ordered events where practical. Migration metadata and schema versions are mandatory from the first database revision.
+Current state is derived from ordered events where practical. Corrections append a replacement event that names the superseded event instead of rewriting history. Migration metadata and schema versions are present from the first database revision. See [docs/data-storage.md](docs/data-storage.md) for UTC/timezone rules, private storage, and deletion boundaries.
 
 ## Privacy, permissions, and storage
 
@@ -104,7 +104,7 @@ Cutting Log is a personal observation journal, not a botanical diagnostic, treat
 
 ## Status and milestones
 
-**Current status: reproducible Flutter shell.** The repository contains an offline, account-free app shell, repository-owned unit/widget tests, and Android/iOS CI build jobs. Persistence, complete product workflows, signed packages, physical-device evidence, screenshots, and store releases do not exist yet.
+**Current status: reproducible Flutter shell with local domain persistence.** The repository contains an offline, account-free app shell, an event-based domain model, a versioned Drift/SQLite adapter, repository-owned unit/widget/data tests, and Android/iOS CI build jobs. Complete product workflows, signed packages, physical-device evidence, screenshots, and store releases do not exist yet.
 
 1. Bootstrap Flutter packages and CI.
 2. Implement the event-based local domain and persistence layer.
