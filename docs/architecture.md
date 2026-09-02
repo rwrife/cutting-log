@@ -12,4 +12,4 @@ Cutting Log keeps dependencies pointing inward so the local-first core remains t
 
 The composition root is `lib/main.dart`; shared app theming and routing begin in `lib/src/app.dart`. Domain and application code must not import Flutter UI or platform plugins. Platform access is introduced through narrow interfaces and must never be invoked during startup. Camera/photo and notification requests remain optional and user-initiated.
 
-The bootstrap intentionally uses an in-memory empty repository. Drift persistence belongs to issue #2 and will implement the existing domain-facing repository boundary.
+The shell still uses an in-memory overview until the capture workflow composes persistence. The versioned Drift database and `JournalDataRepository` adapter are available under `lib/src/data/`; application code must receive them through the domain-facing port rather than importing Drift. See [data-storage.md](data-storage.md) for timestamp, migration, ownership, and deletion boundaries.
