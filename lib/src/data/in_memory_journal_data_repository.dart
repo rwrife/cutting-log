@@ -58,8 +58,28 @@ final class InMemoryJournalDataRepository implements JournalDataRepository {
 
   @override
   Future<ParentPlant?> getParentPlant(EntityId id) async => _parents[id];
+
+  @override
+  Future<List<ParentPlant>> getParentPlants() async =>
+      _parents.values.toList()..sort((left, right) {
+        final name = left.nickname.toLowerCase().compareTo(
+          right.nickname.toLowerCase(),
+        );
+        return name != 0 ? name : left.id.compareTo(right.id);
+      });
+
   @override
   Future<Cutting?> getCutting(EntityId id) async => _cuttings[id];
+
+  @override
+  Future<List<Cutting>> getCuttings({EntityId? parentId}) async =>
+      _cuttings.values
+          .where((cutting) => parentId == null || cutting.parentId == parentId)
+          .toList()
+        ..sort((left, right) {
+          final started = right.startedAtUtc.compareTo(left.startedAtUtc);
+          return started != 0 ? started : left.id.compareTo(right.id);
+        });
   @override
   Future<List<CuttingEvent>> getCuttingEvents(EntityId id) async =>
       _events.values.where((e) => e.cuttingId == id).toList()

@@ -45,11 +45,24 @@ final class CaptureWorkflow {
     Iterable<String> tags = const <String>[],
     String initialNote = '',
   }) async {
+    final normalizedName = name.trim();
+    final siblings = await _repository.getCuttings(parentId: parentId);
+    if (siblings.any(
+      (cutting) =>
+          cutting.name.toLowerCase() == normalizedName.toLowerCase() &&
+          cutting.archivedAtUtc == null,
+    )) {
+      throw ArgumentError.value(
+        name,
+        'name',
+        'must be unique among active cuttings for this parent',
+      );
+    }
     final now = _clock();
     final cutting = Cutting(
       id: _ids.next('cutting'),
       parentId: parentId,
-      name: name,
+      name: normalizedName,
       method: method,
       medium: medium,
       location: location,
@@ -75,48 +88,87 @@ final class CaptureWorkflow {
     required EntityId cuttingId,
     required String note,
     DateTime? occurredAtUtc,
-  }) => _repository.appendEvent(
-    CuttingEvent(
-      id: _ids.next('event'),
-      cuttingId: cuttingId,
-      occurredAtUtc: occurredAtUtc ?? _clock(),
-      createdAtUtc: _clock(),
-      kind: CuttingEventKind.observation,
-      note: note,
-    ),
-  );
+  }) {
+    if (note.trim().isEmpty) {
+      throw ArgumentError.value(note, 'note', 'must not be empty');
+    }
+    final now = _clock();
+    return _repository.appendEvent(
+      CuttingEvent(
+        id: _ids.next('event'),
+        cuttingId: cuttingId,
+        occurredAtUtc: occurredAtUtc ?? now,
+        createdAtUtc: now,
+        kind: CuttingEventKind.observation,
+        note: note.trim(),
+      ),
+    );
+  }
 
   Future<void> changeStage({
     required EntityId cuttingId,
     required CuttingStage stage,
     String note = '',
-  }) => _repository.appendEvent(
-    CuttingEvent(
-      id: _ids.next('event'),
-      cuttingId: cuttingId,
-      occurredAtUtc: _clock(),
-      createdAtUtc: _clock(),
-      kind: CuttingEventKind.stage,
-      stage: stage,
-      note: note,
-    ),
-  );
+  }) {
+    final now = _clock();
+    return _repository.appendEvent(
+      CuttingEvent(
+        id: _ids.next('event'),
+        cuttingId: cuttingId,
+        occurredAtUtc: now,
+        createdAtUtc: now,
+        kind: CuttingEventKind.stage,
+        stage: stage,
+        note: note,
+      ),
+    );
+  }
 
   Future<void> recordOutcome({
     required EntityId cuttingId,
     required CuttingOutcome outcome,
     String note = '',
-  }) => _repository.appendEvent(
-    CuttingEvent(
-      id: _ids.next('event'),
-      cuttingId: cuttingId,
-      occurredAtUtc: _clock(),
-      createdAtUtc: _clock(),
-      kind: CuttingEventKind.outcome,
-      outcome: outcome,
-      note: note,
-    ),
-  );
+  }) {
+    final now = _clock();
+    return _repository.appendEvent(
+      CuttingEvent(
+        id: _ids.next('event'),
+        cuttingId: cuttingId,
+        occurredAtUtc: now,
+        createdAtUtc: now,
+        kind: CuttingEventKind.outcome,
+        outcome: outcome,
+        note: note,
+      ),
+    );
+  }
+
+  Future<void> correctEvent({
+    required CuttingEvent original,
+    required String note,
+    DateTime? occurredAtUtc,
+  }) {
+    final now = _clock();
+    return _repository.appendEvent(
+      CuttingEvent(
+        id: _ids.next('event'),
+        cuttingId: original.cuttingId,
+        occurredAtUtc: occurredAtUtc ?? original.occurredAtUtc,
+        createdAtUtc: now,
+        kind: original.kind,
+        note: note,
+        stage: original.stage,
+        outcome: original.outcome,
+        correctsEventId: original.id,
+      ),
+    );
+  }
+
+  Future<void> archiveParent(EntityId id) =>
+      _repository.archiveParentPlant(id, _clock());
+
+  Future<void> archiveCutting(EntityId id) =>
+      _repository.archiveCutting(id, _clock());
 }
 
 final class IdFactory {

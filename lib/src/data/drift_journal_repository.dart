@@ -153,6 +153,31 @@ final class DriftJournalRepository implements JournalDataRepository {
   }
 
   @override
+  Future<List<Cutting>> getCuttings({EntityId? parentId}) async {
+    final query = _database.select(_database.cuttings);
+    if (parentId != null) {
+      query.where((table) => table.parentId.equals(parentId.value));
+    }
+    query.orderBy(<OrderingTerm Function(Cuttings)>[
+      (table) => OrderingTerm.desc(table.startedAtUtc),
+      (table) => OrderingTerm.asc(table.id),
+    ]);
+    final rows = await query.get();
+    final values = <Cutting>[];
+    for (final row in rows) {
+      final tags =
+          await (_database.select(_database.cuttingTags)
+                ..where((table) => table.cuttingId.equals(row.id))
+                ..orderBy(<OrderingTerm Function(CuttingTags)>[
+                  (table) => OrderingTerm.asc(table.tag),
+                ]))
+              .get();
+      values.add(_cutting(row, tags.map((tag) => tag.tag)));
+    }
+    return values;
+  }
+
+  @override
   Future<List<CuttingEvent>> getCuttingEvents(EntityId cuttingId) async {
     final rows =
         await (_database.select(_database.cuttingEvents)
@@ -185,6 +210,18 @@ final class DriftJournalRepository implements JournalDataRepository {
       _database.parentPlants,
     )..where((table) => table.id.equals(id.value))).getSingleOrNull();
     return row == null ? null : _parent(row);
+  }
+
+  @override
+  Future<List<ParentPlant>> getParentPlants() async {
+    final rows =
+        await (_database.select(_database.parentPlants)
+              ..orderBy(<OrderingTerm Function(ParentPlants)>[
+                (table) => OrderingTerm.asc(table.nickname),
+                (table) => OrderingTerm.asc(table.id),
+              ]))
+            .get();
+    return rows.map(_parent).toList(growable: false);
   }
 
   @override

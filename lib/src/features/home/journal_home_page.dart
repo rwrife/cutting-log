@@ -21,221 +21,690 @@ final class JournalHomePage extends StatefulWidget {
 
 final class _JournalHomePageState extends State<JournalHomePage> {
   final _parentName = TextEditingController();
+  final _parentSpecies = TextEditingController();
+  final _parentNotes = TextEditingController();
   final _cuttingName = TextEditingController();
   final _method = TextEditingController(text: 'Stem');
-  final _note = TextEditingController();
+  final _medium = TextEditingController();
+  final _location = TextEditingController();
+  final _tags = TextEditingController();
+  final _initialNote = TextEditingController();
+  final _eventNote = TextEditingController();
+
+  List<ParentPlant> _parents = const <ParentPlant>[];
+  List<Cutting> _cuttings = const <Cutting>[];
+  List<CuttingEvent> _events = const <CuttingEvent>[];
   ParentPlant? _parent;
   Cutting? _cutting;
+  DateTime _startedAt = DateTime.now().toUtc();
+  bool _loading = true;
+  bool _saving = false;
   String? _error;
+
+  JournalDataRepository? get _repository => widget.dataRepository;
+  CaptureWorkflow? get _workflow =>
+      _repository == null ? null : CaptureWorkflow(_repository!);
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
 
   @override
   void dispose() {
-    _parentName.dispose();
-    _cuttingName.dispose();
-    _method.dispose();
-    _note.dispose();
+    for (final controller in <TextEditingController>[
+      _parentName,
+      _parentSpecies,
+      _parentNotes,
+      _cuttingName,
+      _method,
+      _medium,
+      _location,
+      _tags,
+      _initialNote,
+      _eventNote,
+    ]) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
-  Future<void> _createParent() async {
-    final repository = widget.dataRepository;
-    if (repository == null) return;
+  Future<void> _reload({
+    EntityId? selectParent,
+    EntityId? selectCutting,
+  }) async {
+    final repository = _repository;
+    if (repository == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    if (mounted) setState(() => _loading = true);
     try {
-      final parent = await CaptureWorkflow(repository)
-          .createParent(nickname: _parentName.text);
+      final parents = await repository.getParentPlants();
+      final parent = _findById(parents, selectParent ?? _parent?.id);
+      final cuttings = parent == null
+          ? const <Cutting>[]
+          : await repository.getCuttings(parentId: parent.id);
+      final cutting = _findById(cuttings, selectCutting ?? _cutting?.id);
+      final events = cutting == null
+          ? const <CuttingEvent>[]
+          : await repository.getCuttingEvents(cutting.id);
+      if (!mounted) return;
       setState(() {
+        _parents = parents;
         _parent = parent;
+        _cuttings = cuttings;
+        _cutting = cutting;
+        _events = events;
+        _loading = false;
         _error = null;
       });
-    } on ArgumentError catch (error) {
-      setState(
-        () => _error = error.message?.toString() ?? 'Check the parent name.',
-      );
-    } on JournalRepositoryException catch (error) {
-      setState(() => _error = error.message);
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = _message(error, fallback: 'Could not load local records.');
+      });
     }
   }
 
-  Future<void> _createCutting() async {
-    final repository = widget.dataRepository;
-    final parent = _parent;
-    if (repository == null || parent == null) return;
+  T? _findById<T>(Iterable<T> values, EntityId? id) {
+    if (id == null) return null;
+    for (final value in values) {
+      final valueId = switch (value) {
+        final ParentPlant parent => parent.id,
+        final Cutting cutting => cutting.id,
+        _ => null,
+      };
+      if (valueId == id) return value;
+    }
+    return null;
+  }
+
+  Future<bool> _run(
+    Future<void> Function() action, {
+    EntityId? selectParent,
+    EntityId? selectCutting,
+  }) async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     try {
-      final cutting = await CaptureWorkflow(repository).startCutting(
+      await action();
+      await _reload(selectParent: selectParent, selectCutting: selectCutting);
+      if (mounted) setState(() => _saving = false);
+      return true;
+    } on Object catch (error) {
+      if (!mounted) return false;
+      setState(() {
+        _saving = false;
+        _loading = false;
+        _error = _message(error);
+      });
+      return false;
+    }
+  }
+
+  String _message(Object error, {String fallback = 'Could not save changes.'}) {
+    if (error is ArgumentError) {
+      final name = error.name?.toString();
+      final reason = error.message?.toString() ?? 'is invalid';
+      return name == null ? reason : '${_fieldLabel(name)} $reason.';
+    }
+    if (error is JournalRepositoryException) return error.message;
+    if (error is StateError) return error.message;
+    return fallback;
+  }
+
+  String _fieldLabel(String name) => switch (name) {
+    'nickname' => 'Parent nickname',
+    'name' => 'Cutting name',
+    'method' => 'Method',
+    'note' => 'Observation',
+    'tags' => 'Tags',
+    _ => 'Entry',
+  };
+
+  Future<void> _createParent() async {
+    final workflow = _workflow;
+    if (workflow == null) return;
+    ParentPlant? created;
+    final saved = await _run(() async {
+      created = await workflow.createParent(
+        nickname: _parentName.text,
+        speciesText: _parentSpecies.text.trim().isEmpty
+            ? null
+            : _parentSpecies.text.trim(),
+        notes: _parentNotes.text,
+      );
+    });
+    if (saved) {
+      _parentName.clear();
+      _parentSpecies.clear();
+      _parentNotes.clear();
+      await _selectParent(created!);
+    }
+  }
+
+  Future<void> _selectParent(ParentPlant parent) async {
+    setState(() {
+      _parent = parent;
+      _cutting = null;
+      _events = const <CuttingEvent>[];
+    });
+    await _reload(selectParent: parent.id);
+  }
+
+  Future<void> _createCutting() async {
+    final workflow = _workflow;
+    final parent = _parent;
+    if (workflow == null || parent == null) return;
+    Cutting? created;
+    final saved = await _run(() async {
+      created = await workflow.startCutting(
         parentId: parent.id,
         name: _cuttingName.text,
         method: _method.text,
-        startedAtUtc: DateTime.now().toUtc(),
-        initialNote: _note.text,
+        medium: _medium.text,
+        location: _location.text,
+        tags: _tags.text.split(',').where((tag) => tag.trim().isNotEmpty),
+        startedAtUtc: _startedAt,
+        initialNote: _initialNote.text,
       );
-      setState(() {
-        _cutting = cutting;
-        _error = null;
-      });
-    } on ArgumentError catch (error) {
-      setState(
-        () =>
-            _error = error.message?.toString() ?? 'Check the cutting details.',
-      );
-    } on JournalRepositoryException catch (error) {
-      setState(() => _error = error.message);
+    }, selectParent: parent.id);
+    if (saved) {
+      _cuttingName.clear();
+      _medium.clear();
+      _location.clear();
+      _tags.clear();
+      _initialNote.clear();
+      await _reload(selectParent: parent.id, selectCutting: created!.id);
     }
+  }
+
+  Future<void> _pickStartDate() async {
+    final local = _startedAt.toLocal();
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: local,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+      helpText: 'Select cutting start date',
+    );
+    if (selected != null && mounted) {
+      setState(() {
+        _startedAt = DateTime.utc(selected.year, selected.month, selected.day);
+      });
+    }
+  }
+
+  Future<void> _addObservation() async {
+    final workflow = _workflow;
+    final cutting = _cutting;
+    if (workflow == null || cutting == null) return;
+    final saved = await _run(
+      () =>
+          workflow.addObservation(cuttingId: cutting.id, note: _eventNote.text),
+      selectParent: cutting.parentId,
+      selectCutting: cutting.id,
+    );
+    if (saved) _eventNote.clear();
+  }
+
+  Future<void> _changeStage(CuttingStage stage) async {
+    final workflow = _workflow;
+    final cutting = _cutting;
+    if (workflow == null || cutting == null) return;
+    await _run(
+      () => workflow.changeStage(cuttingId: cutting.id, stage: stage),
+      selectParent: cutting.parentId,
+      selectCutting: cutting.id,
+    );
+  }
+
+  Future<void> _recordOutcome(CuttingOutcome outcome) async {
+    final workflow = _workflow;
+    final cutting = _cutting;
+    if (workflow == null || cutting == null) return;
+    await _run(
+      () => workflow.recordOutcome(cuttingId: cutting.id, outcome: outcome),
+      selectParent: cutting.parentId,
+      selectCutting: cutting.id,
+    );
+  }
+
+  Future<void> _correct(CuttingEvent event) async {
+    var replacement = event.note;
+    final note = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Correct event note'),
+        content: TextFormField(
+          initialValue: event.note,
+          onChanged: (value) => replacement = value,
+          autofocus: true,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Replacement note',
+            helperText: 'The original event remains in history.',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, replacement),
+            child: const Text('Save correction'),
+          ),
+        ],
+      ),
+    );
+    final workflow = _workflow;
+    final cutting = _cutting;
+    if (note == null || workflow == null || cutting == null) return;
+    await _run(
+      () => workflow.correctEvent(original: event, note: note),
+      selectParent: cutting.parentId,
+      selectCutting: cutting.id,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     const policy = StartupPolicy();
-
     return Scaffold(
       appBar: AppBar(title: const Text('Cutting Log')),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: <Widget>[
-            Semantics(
-              container: true,
-              label: 'Private journal ready',
-              child: Text(
-                'Observe each cutting over time',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Your useful core stays on this device. No account or optional '
-              'permission is needed to open the journal.',
-            ),
-            const SizedBox(height: 24),
-            if (widget.dataRepository != null) ...<Widget>[
-              Text(
-                'Capture a record',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              if (_parent == null) ...<Widget>[
-                TextField(
-                  controller: _parentName,
-                  textInputAction: TextInputAction.done,
-                  decoration: const InputDecoration(
-                    labelText: 'Parent plant nickname',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                FilledButton(
-                  onPressed: _createParent,
-                  child: const Text('Create parent plant'),
-                ),
-              ] else if (_cutting == null) ...<Widget>[
-                Text('Selected parent: ${_parent!.nickname}'),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _cuttingName,
-                  decoration: const InputDecoration(
-                    labelText: 'Unique cutting name',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _method,
-                  decoration: const InputDecoration(
-                    labelText: 'Method',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _note,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Initial observation (optional)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                FilledButton(
-                  onPressed: _createCutting,
-                  child: const Text('Start cutting'),
-                ),
-              ] else
-                Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    'Cutting ${_cutting!.name} was saved. Add observations and stage changes in the next journal update.',
-                  ),
-                ),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 24),
-            ],
-            _StatusTile(
-              icon: Icons.eco_outlined,
-              label: 'Parent plants',
-              value: widget.overview.parentPlantCount.toString(),
-            ),
-            _StatusTile(
-              icon: Icons.content_cut,
-              label: 'Active cuttings',
-              value: widget.overview.activeCuttingCount.toString(),
-            ),
-            _StatusTile(
-              icon: Icons.cloud_off_outlined,
-              label: 'Offline and account-free',
-              value: policy.requiresNetwork || policy.requiresAccount
-                  ? 'Unavailable'
-                  : 'Ready',
-            ),
-            const SizedBox(height: 24),
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
+        child: RefreshIndicator(
+          onRefresh: _reload,
+          child: ListView(
+            padding: const EdgeInsets.all(24),
+            children: <Widget>[
+              Semantics(
+                container: true,
+                label: 'Private journal ready',
                 child: Text(
-                  'Cutting Log records your observations. It does not diagnose '
-                  'plants, prescribe treatment, or predict propagation success.',
+                  'Observe each cutting over time',
+                  style: Theme.of(context).textTheme.headlineMedium,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              const Text(
+                'Stored privately on this device. No account, network, or optional permission is needed.',
+              ),
+              if (_loading) ...<Widget>[
+                const SizedBox(height: 24),
+                Center(
+                  child: Semantics(
+                    label: 'Loading local journal',
+                    child: const CircularProgressIndicator(),
+                  ),
+                ),
+              ] else if (_repository == null) ...<Widget>[
+                const SizedBox(height: 24),
+                _overview(policy),
+              ] else ...<Widget>[
+                if (_error != null) _errorPanel(),
+                const SizedBox(height: 24),
+                _parentSection(),
+                if (_parent != null) ...<Widget>[
+                  const SizedBox(height: 24),
+                  _cuttingSection(),
+                ],
+                if (_cutting != null) ...<Widget>[
+                  const SizedBox(height: 24),
+                  _timelineSection(),
+                ],
+              ],
+              const SizedBox(height: 24),
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'Cutting Log records your observations. It does not diagnose plants, prescribe treatment, or predict propagation success.',
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  Widget _errorPanel() => Semantics(
+    liveRegion: true,
+    child: MaterialBanner(
+      content: Text(_error!),
+      actions: <Widget>[
+        TextButton(onPressed: _reload, child: const Text('Retry')),
+      ],
+    ),
+  );
+
+  Widget _parentSection() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: <Widget>[
+      Text('Parent plants', style: Theme.of(context).textTheme.titleLarge),
+      if (_parents.where((parent) => parent.archivedAtUtc == null).isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Text('No active parent plants yet. Create one below.'),
+        )
+      else
+        for (final parent in _parents.where(
+          (parent) => parent.archivedAtUtc == null,
+        ))
+          Card(
+            child: ListTile(
+              title: Text(parent.nickname),
+              subtitle: parent.speciesText == null
+                  ? null
+                  : Text(parent.speciesText!),
+              selected: _parent?.id == parent.id,
+              onTap: () => _selectParent(parent),
+              trailing: IconButton(
+                tooltip: 'Archive ${parent.nickname}',
+                onPressed: _saving
+                    ? null
+                    : () => _run(() => _workflow!.archiveParent(parent.id)),
+                icon: const Icon(Icons.archive_outlined),
+              ),
+            ),
+          ),
+      const SizedBox(height: 12),
+      Text('Create parent', style: Theme.of(context).textTheme.titleMedium),
+      _field(
+        _parentName,
+        'Parent plant nickname',
+        action: TextInputAction.next,
+      ),
+      _field(
+        _parentSpecies,
+        'Species text (optional)',
+        action: TextInputAction.next,
+      ),
+      _field(_parentNotes, 'Parent notes (optional)', maxLines: 2),
+      FilledButton.icon(
+        key: const ValueKey<String>('create-parent'),
+        onPressed: _saving ? null : _createParent,
+        icon: const Icon(Icons.add),
+        label: const Text('Create parent plant'),
+      ),
+    ],
+  );
+
+  Widget _cuttingSection() {
+    final parent = _parent!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                'Cuttings for ${parent.nickname}',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            TextButton(
+              onPressed: () => setState(() => _parent = null),
+              child: const Text('Change parent'),
+            ),
+          ],
+        ),
+        if (_cuttings.where((cutting) => cutting.archivedAtUtc == null).isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text('No active cuttings for this parent.'),
+          )
+        else
+          for (final cutting in _cuttings.where(
+            (cutting) => cutting.archivedAtUtc == null,
+          ))
+            Card(
+              child: ListTile(
+                title: Text(cutting.name),
+                subtitle: Text(
+                  '${cutting.method} • started ${_date(cutting.startedAtUtc)}',
+                ),
+                selected: _cutting?.id == cutting.id,
+                onTap: () =>
+                    _reload(selectParent: parent.id, selectCutting: cutting.id),
+                trailing: IconButton(
+                  tooltip: 'Archive ${cutting.name}',
+                  onPressed: _saving
+                      ? null
+                      : () => _run(
+                          () => _workflow!.archiveCutting(cutting.id),
+                          selectParent: parent.id,
+                        ),
+                  icon: const Icon(Icons.archive_outlined),
+                ),
+              ),
+            ),
+        const SizedBox(height: 12),
+        Text('Start a cutting', style: Theme.of(context).textTheme.titleMedium),
+        _field(
+          _cuttingName,
+          'Unique cutting name',
+          action: TextInputAction.next,
+        ),
+        _field(_method, 'Method', action: TextInputAction.next),
+        _field(_medium, 'Medium (optional)', action: TextInputAction.next),
+        _field(
+          _location,
+          'Location text (optional)',
+          action: TextInputAction.next,
+        ),
+        _field(
+          _tags,
+          'Tags, comma separated (optional)',
+          action: TextInputAction.next,
+        ),
+        _field(_initialNote, 'Initial observation (optional)', maxLines: 3),
+        OutlinedButton.icon(
+          onPressed: _saving ? null : _pickStartDate,
+          icon: const Icon(Icons.calendar_today_outlined),
+          label: Text('Start date: ${_date(_startedAt)}'),
+        ),
+        OutlinedButton.icon(
+          onPressed: _saving
+              ? null
+              : () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Photos are optional and will be available in a later update.',
+                    ),
+                  ),
+                ),
+          icon: const Icon(Icons.add_a_photo_outlined),
+          label: const Text('Add photo (optional)'),
+        ),
+        FilledButton(
+          key: const ValueKey<String>('start-cutting'),
+          onPressed: _saving ? null : _createCutting,
+          child: const Text('Start cutting'),
+        ),
+      ],
+    );
+  }
+
+  Widget _timelineSection() {
+    final cutting = _cutting!;
+    DerivedCuttingState? state;
+    try {
+      state = deriveCuttingState(_events);
+    } on StateError {
+      state = null;
+    }
+    final superseded = _events
+        .map((event) => event.correctsEventId)
+        .whereType<EntityId>()
+        .toSet();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          '${cutting.name} timeline',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        Text(
+          state == null
+              ? 'History needs review'
+              : 'Stage: ${_label(state.stage.name)} • Outcome: ${_label(state.outcome.name)}',
+        ),
+        const SizedBox(height: 12),
+        if (_events.isEmpty)
+          const Text('No timeline events yet.')
+        else
+          for (final event in _events)
+            Card(
+              child: ListTile(
+                leading: Icon(
+                  _eventIcon(event),
+                  semanticLabel: _eventTitle(event),
+                ),
+                title: Text(_eventTitle(event)),
+                subtitle: Text(
+                  '${_dateTime(event.occurredAtUtc)}${event.note.isEmpty ? '' : '\n${event.note}'}${superseded.contains(event.id) ? '\nCorrected — retained for history' : ''}',
+                ),
+                isThreeLine:
+                    event.note.isNotEmpty || superseded.contains(event.id),
+                trailing:
+                    superseded.contains(event.id) ||
+                        event.correctsEventId != null
+                    ? null
+                    : IconButton(
+                        tooltip: 'Correct ${_eventTitle(event).toLowerCase()}',
+                        onPressed: _saving ? null : () => _correct(event),
+                        icon: const Icon(Icons.edit_note_outlined),
+                      ),
+              ),
+            ),
+        if (state?.outcome == CuttingOutcome.active) ...<Widget>[
+          const SizedBox(height: 12),
+          _field(_eventNote, 'New observation', maxLines: 3),
+          FilledButton.icon(
+            key: const ValueKey<String>('add-observation'),
+            onPressed: _saving ? null : _addObservation,
+            icon: const Icon(Icons.note_add_outlined),
+            label: const Text('Add observation'),
+          ),
+          MenuAnchor(
+            builder: (context, controller, child) => OutlinedButton.icon(
+              key: const ValueKey<String>('record-outcome'),
+              onPressed: _saving ? null : controller.open,
+              icon: const Icon(Icons.timeline_outlined),
+              label: const Text('Record stage change'),
+            ),
+            menuChildren: CuttingStage.values
+                .where(
+                  (stage) => state == null || stage.index >= state.stage.index,
+                )
+                .map(
+                  (stage) => MenuItemButton(
+                    onPressed: () => _changeStage(stage),
+                    child: Text(_label(stage.name)),
+                  ),
+                )
+                .toList(),
+          ),
+          MenuAnchor(
+            builder: (context, controller, child) => OutlinedButton.icon(
+              onPressed: _saving ? null : controller.open,
+              icon: const Icon(Icons.flag_outlined),
+              label: const Text('Record outcome'),
+            ),
+            menuChildren: CuttingOutcome.values
+                .where((outcome) => outcome != CuttingOutcome.active)
+                .map(
+                  (outcome) => MenuItemButton(
+                    onPressed: () => _recordOutcome(outcome),
+                    child: Text(_label(outcome.name)),
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _field(
+    TextEditingController controller,
+    String label, {
+    int maxLines = 1,
+    TextInputAction? action,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: TextField(
+      controller: controller,
+      maxLines: maxLines,
+      textInputAction: action,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+      ),
+    ),
+  );
+
+  Widget _overview(StartupPolicy policy) => Column(
+    children: <Widget>[
+      _StatusTile(
+        label: 'Parent plants',
+        value: widget.overview.parentPlantCount.toString(),
+      ),
+      _StatusTile(
+        label: 'Active cuttings',
+        value: widget.overview.activeCuttingCount.toString(),
+      ),
+      _StatusTile(
+        label: 'Offline and account-free',
+        value: policy.requiresNetwork || policy.requiresAccount
+            ? 'Unavailable'
+            : 'Ready',
+      ),
+    ],
+  );
+
+  IconData _eventIcon(CuttingEvent event) => switch (event.kind) {
+    CuttingEventKind.observation => Icons.notes,
+    CuttingEventKind.stage => Icons.timeline,
+    CuttingEventKind.outcome => Icons.flag,
+  };
+
+  String _eventTitle(CuttingEvent event) => switch (event.kind) {
+    CuttingEventKind.observation => 'Observation',
+    CuttingEventKind.stage => 'Stage: ${_label(event.stage!.name)}',
+    CuttingEventKind.outcome => 'Outcome: ${_label(event.outcome!.name)}',
+  };
+
+  String _label(String value) =>
+      '${value[0].toUpperCase()}${value.substring(1)}';
+
+  String _date(DateTime value) =>
+      value.toLocal().toIso8601String().substring(0, 10);
+
+  String _dateTime(DateTime value) =>
+      value.toLocal().toIso8601String().replaceFirst('T', ' ').substring(0, 16);
 }
 
 final class _StatusTile extends StatelessWidget {
-  const _StatusTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+  const _StatusTile({required this.label, required this.value});
 
-  final IconData icon;
   final String label;
   final String value;
 
   @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: '$label: $value',
-      excludeSemantics: true,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: Icon(icon),
-        title: Text(label),
-        trailing: Text(value),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Semantics(
+    label: '$label: $value',
+    excludeSemantics: true,
+    child: ListTile(title: Text(label), trailing: Text(value)),
+  );
 }
