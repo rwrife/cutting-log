@@ -44,11 +44,15 @@ abstract interface class JournalDataRepository {
 
   Future<Cutting?> getCutting(EntityId id);
 
+  Future<List<Cutting>> getCuttings({EntityId? parentId});
+
   Future<List<CuttingEvent>> getCuttingEvents(EntityId cuttingId);
 
   Future<List<MediaAsset>> getMediaAssets(EntityId eventId);
 
   Future<ParentPlant?> getParentPlant(EntityId id);
+
+  Future<List<ParentPlant>> getParentPlants();
 
   Future<List<Reminder>> getReminders(EntityId cuttingId);
 
