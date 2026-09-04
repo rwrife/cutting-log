@@ -8,6 +8,20 @@ The data adapter does not open sockets, upload records, emit analytics, or log e
 
 All persisted instants are explicit UTC `DateTime` values. A local calendar choice for a reminder is stored as both its resolved UTC instant and the IANA timezone identifier used to resolve it. This keeps ordering deterministic while allowing a later notification adapter to explain or recalculate wall-clock behavior. The database does not infer a device timezone. Equal event timestamps are ordered by creation time and then stable ID; later entry of an older observation is supported.
 
+The selected wall-clock time is resolved with the bundled IANA timezone data.
+A spring-forward gap moves to the first valid instant; a fall-back overlap uses
+the timezone library's earlier occurrence. An existing check-in keeps its
+absolute instant after a device timezone change; editing resolves the newly
+selected wall-clock value again. Platform delivery is inexact and may be
+delayed by battery or OS policy, so the in-app due list is authoritative.
+
+Notification permission is requested only from the first **Add check-in**
+action. Denial or later revocation never blocks journaling or the due list and
+is not re-prompted automatically. Startup reconciliation never requests
+permission; when already authorized it repairs missing schedules, cancels
+stale app-owned IDs, and cancels reminders for archived cuttings without
+creating duplicates.
+
 ## Append-only history and corrections
 
 `CuttingEvent` rows are append-only. A correction is another event whose `correctsEventId` names the superseded event. Replay excludes superseded rows but retains both rows for provenance. Stage changes cannot move backward, and stage changes after a terminal outcome are rejected. Observations remain neutral user-entered records rather than diagnoses or success predictions.

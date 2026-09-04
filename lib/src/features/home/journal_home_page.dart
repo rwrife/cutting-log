@@ -1,19 +1,25 @@
 import 'package:cutting_log/src/application/capture_workflow.dart';
+import 'package:cutting_log/src/application/reminder_workflow.dart';
+import 'package:cutting_log/src/application/review_models.dart';
+import 'package:cutting_log/src/application/review_workflow.dart';
 import 'package:cutting_log/src/domain/journal_data_repository.dart';
 import 'package:cutting_log/src/domain/journal_entities.dart';
 import 'package:cutting_log/src/domain/journal_overview.dart';
 import 'package:cutting_log/src/domain/startup_policy.dart';
+import 'package:cutting_log/src/platform/local_notification_gateway.dart';
 import 'package:flutter/material.dart';
 
 final class JournalHomePage extends StatefulWidget {
   const JournalHomePage({
     required this.overview,
     this.dataRepository,
+    this.notificationGateway = const DisabledLocalNotificationGateway(),
     super.key,
   });
 
   final JournalOverview overview;
   final JournalDataRepository? dataRepository;
+  final LocalNotificationGateway notificationGateway;
 
   @override
   State<JournalHomePage> createState() => _JournalHomePageState();
@@ -30,10 +36,20 @@ final class _JournalHomePageState extends State<JournalHomePage> {
   final _tags = TextEditingController();
   final _initialNote = TextEditingController();
   final _eventNote = TextEditingController();
+  final _search = TextEditingController();
 
   List<ParentPlant> _parents = const <ParentPlant>[];
   List<Cutting> _cuttings = const <Cutting>[];
   List<CuttingEvent> _events = const <CuttingEvent>[];
+  List<Reminder> _reminders = const <Reminder>[];
+  List<ReviewItem> _reviewItems = const <ReviewItem>[];
+  List<SiblingSummary> _siblings = const <SiblingSummary>[];
+  EntityId? _reviewParent;
+  CuttingStage? _reviewStage;
+  CuttingOutcome? _reviewOutcome;
+  DueFilter _dueFilter = DueFilter.any;
+  String? _reviewTag;
+  bool _recentOnly = false;
   ParentPlant? _parent;
   Cutting? _cutting;
   DateTime _startedAt = DateTime.now().toUtc();
@@ -64,6 +80,7 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       _tags,
       _initialNote,
       _eventNote,
+      _search,
     ]) {
       controller.dispose();
     }
@@ -90,6 +107,24 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       final events = cutting == null
           ? const <CuttingEvent>[]
           : await repository.getCuttingEvents(cutting.id);
+      final reminders = cutting == null
+          ? const <Reminder>[]
+          : await repository.getReminders(cutting.id);
+      final siblings = parent == null
+          ? const <SiblingSummary>[]
+          : await ReviewWorkflow(repository).siblings(parent.id);
+      final reviewItems = await ReviewWorkflow(repository).search(
+        ReviewFilter(
+          query: _search.text,
+          parentId: _reviewParent,
+          stage: _reviewStage,
+          tag: _reviewTag,
+          outcome: _reviewOutcome,
+          due: _dueFilter,
+          activeWithin: _recentOnly ? const Duration(days: 7) : null,
+        ),
+        nowUtc: DateTime.now().toUtc(),
+      );
       if (!mounted) return;
       setState(() {
         _parents = parents;
@@ -97,6 +132,9 @@ final class _JournalHomePageState extends State<JournalHomePage> {
         _cuttings = cuttings;
         _cutting = cutting;
         _events = events;
+        _reminders = reminders;
+        _siblings = siblings;
+        _reviewItems = reviewItems;
         _loading = false;
         _error = null;
       });
@@ -351,6 +389,8 @@ final class _JournalHomePageState extends State<JournalHomePage> {
               ] else ...<Widget>[
                 if (_error != null) _errorPanel(),
                 const SizedBox(height: 24),
+                _reviewSection(),
+                const SizedBox(height: 24),
                 _parentSection(),
                 if (_parent != null) ...<Widget>[
                   const SizedBox(height: 24),
@@ -391,6 +431,7 @@ final class _JournalHomePageState extends State<JournalHomePage> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: <Widget>[
       Text('Parent plants', style: Theme.of(context).textTheme.titleLarge),
+      if (_error != null) Semantics(liveRegion: true, child: Text(_error!)),
       if (_parents.where((parent) => parent.archivedAtUtc == null).isEmpty)
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
@@ -631,9 +672,377 @@ final class _JournalHomePageState extends State<JournalHomePage> {
                 )
                 .toList(),
           ),
+          const SizedBox(height: 12),
+          _reminderSection(cutting),
         ],
+        const SizedBox(height: 12),
+        _siblingSection(cutting),
       ],
     );
+  }
+
+  Widget _reviewSection() {
+    final tags =
+        _cuttingsForFilters.expand((cutting) => cutting.tags).toSet().toList()
+          ..sort();
+    return ExpansionTile(
+      key: const ValueKey<String>('review-section'),
+      initiallyExpanded: false,
+      title: const Text('Review active cuttings'),
+      subtitle: Text('${_reviewItems.length} matching, due first'),
+      children: <Widget>[
+        _field(_search, 'Search names, parent, method, place, or tag'),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: <Widget>[
+            _filterDropdown<EntityId>(
+              label: 'Parent',
+              value: _reviewParent,
+              values: _parents.map((parent) => parent.id),
+              name: (id) => _parents.firstWhere((p) => p.id == id).nickname,
+              onChanged: (value) => _setFilter(() => _reviewParent = value),
+            ),
+            _filterDropdown<CuttingStage>(
+              label: 'Stage',
+              value: _reviewStage,
+              values: CuttingStage.values,
+              name: (value) => _label(value.name),
+              onChanged: (value) => _setFilter(() => _reviewStage = value),
+            ),
+            _filterDropdown<CuttingOutcome>(
+              label: 'Outcome',
+              value: _reviewOutcome,
+              values: CuttingOutcome.values,
+              name: (value) => _label(value.name),
+              onChanged: (value) => _setFilter(() => _reviewOutcome = value),
+            ),
+            _filterDropdown<String>(
+              label: 'Tag',
+              value: _reviewTag,
+              values: tags,
+              name: (value) => value,
+              onChanged: (value) => _setFilter(() => _reviewTag = value),
+            ),
+            DropdownButton<DueFilter>(
+              value: _dueFilter,
+              items: DueFilter.values
+                  .map(
+                    (value) => DropdownMenuItem<DueFilter>(
+                      value: value,
+                      child: Text('Due: ${_label(value.name)}'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) _setFilter(() => _dueFilter = value);
+              },
+            ),
+            FilterChip(
+              label: const Text('Active in last 7 days'),
+              selected: _recentOnly,
+              onSelected: (value) => _setFilter(() => _recentOnly = value),
+            ),
+            OutlinedButton.icon(
+              onPressed: _reload,
+              icon: const Icon(Icons.search),
+              label: const Text('Apply search'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_reviewItems.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text('No active cuttings match these filters.'),
+          )
+        else
+          for (final item in _reviewItems)
+            Card(
+              child: ListTile(
+                title: Text(item.cutting.name),
+                subtitle: Text(
+                  '${item.parent.nickname} • ${_label(item.state.stage.name)} • ${_label(item.state.outcome.name)}\n'
+                  '${item.pendingReminder == null ? 'No check-in due' : 'Check-in ${_dueLabel(item.pendingReminder!)}'} • Last activity ${_date(item.lastActivityUtc)}',
+                ),
+                isThreeLine: true,
+                leading: Icon(
+                  item.pendingReminder != null &&
+                          !item.pendingReminder!.scheduledForUtc.isAfter(
+                            DateTime.now().toUtc(),
+                          )
+                      ? Icons.notification_important_outlined
+                      : Icons.eco_outlined,
+                  semanticLabel: item.pendingReminder == null
+                      ? 'No check-in due'
+                      : _dueLabel(item.pendingReminder!),
+                ),
+                onTap: () => _reload(
+                  selectParent: item.parent.id,
+                  selectCutting: item.cutting.id,
+                ),
+              ),
+            ),
+      ],
+    );
+  }
+
+  List<Cutting> get _cuttingsForFilters =>
+      _reviewItems.map((item) => item.cutting).followedBy(_cuttings).toList();
+
+  Widget _filterDropdown<T>({
+    required String label,
+    required T? value,
+    required Iterable<T> values,
+    required String Function(T) name,
+    required ValueChanged<T?> onChanged,
+  }) => DropdownButton<T?>(
+    value: value,
+    items: <DropdownMenuItem<T?>>[
+      DropdownMenuItem<T?>(value: null, child: Text('$label: Any')),
+      ...values.map(
+        (item) => DropdownMenuItem<T?>(
+          value: item,
+          child: Text('$label: ${name(item)}'),
+        ),
+      ),
+    ],
+    onChanged: onChanged,
+  );
+
+  void _setFilter(VoidCallback update) {
+    setState(update);
+    _reload();
+  }
+
+  Widget _reminderSection(Cutting cutting) {
+    final pending = _reminders
+        .where((reminder) => reminder.status == ReminderStatus.pending)
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text('Check-ins', style: Theme.of(context).textTheme.titleMedium),
+        const Text(
+          'Check-ins stay in this in-app due list even if notifications are denied or revoked.',
+        ),
+        if (pending.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text('No pending check-ins.'),
+          )
+        else
+          for (final reminder in pending)
+            Card(
+              child: ListTile(
+                title: Text(_dueLabel(reminder)),
+                subtitle: Text(
+                  '${_wallDateTime(ReminderWorkflow.wallClockFor(reminder.scheduledForUtc, reminder.timeZoneId))} (${reminder.timeZoneId})${reminder.platformNotificationId == null ? '\nIn-app only; notifications unavailable' : ''}',
+                ),
+                isThreeLine: reminder.platformNotificationId == null,
+                trailing: PopupMenuButton<String>(
+                  tooltip: 'Actions for check-in',
+                  onSelected: (action) => _reminderAction(action, reminder),
+                  itemBuilder: (context) => const <PopupMenuEntry<String>>[
+                    PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    PopupMenuItem(value: 'complete', child: Text('Complete')),
+                    PopupMenuItem(value: 'snooze', child: Text('Snooze 1 day')),
+                    PopupMenuItem(value: 'remove', child: Text('Remove')),
+                  ],
+                ),
+              ),
+            ),
+        FilledButton.icon(
+          key: const ValueKey<String>('add-check-in'),
+          onPressed: _saving ? null : () => _editReminder(cutting),
+          icon: const Icon(Icons.add_alert_outlined),
+          label: const Text('Add check-in'),
+        ),
+      ],
+    );
+  }
+
+  Widget _siblingSection(Cutting selected) => ExpansionTile(
+    title: const Text('Sibling timeline summary'),
+    subtitle: const Text('Recorded dates, stages, and outcomes only'),
+    children: _siblings
+        .map(
+          (summary) => ListTile(
+            selected: summary.cutting.id == selected.id,
+            title: Text(summary.cutting.name),
+            subtitle: Text(
+              'Started ${_date(summary.cutting.startedAtUtc)} • ${_label(summary.state.stage.name)} • ${_label(summary.state.outcome.name)} • ${summary.events.length} events',
+            ),
+            onTap: () => _reload(
+              selectParent: summary.cutting.parentId,
+              selectCutting: summary.cutting.id,
+            ),
+          ),
+        )
+        .toList(),
+  );
+
+  Future<void> _reminderAction(String action, Reminder reminder) async {
+    final workflow = ReminderWorkflow(_repository!, widget.notificationGateway);
+    switch (action) {
+      case 'edit':
+        await _editReminder(_cutting!, existing: reminder);
+        return;
+      case 'complete':
+        await _run(
+          () => workflow.complete(reminder),
+          selectParent: _cutting!.parentId,
+          selectCutting: _cutting!.id,
+        );
+      case 'snooze':
+        await _run(
+          () => workflow.snooze(reminder, const Duration(days: 1)),
+          selectParent: _cutting!.parentId,
+          selectCutting: _cutting!.id,
+        );
+      case 'remove':
+        await _run(
+          () => workflow.remove(reminder),
+          selectParent: _cutting!.parentId,
+          selectCutting: _cutting!.id,
+        );
+    }
+  }
+
+  Future<void> _editReminder(Cutting cutting, {Reminder? existing}) async {
+    var zone = existing?.timeZoneId ?? 'UTC';
+    var selected = existing == null
+        ? DateTime.now().toUtc().add(const Duration(days: 1))
+        : ReminderWorkflow.wallClockFor(existing.scheduledForUtc, zone);
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(existing == null ? 'Add check-in' : 'Edit check-in'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text('Wall-clock time: ${_wallDateTime(selected)}'),
+              OutlinedButton(
+                onPressed: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: selected,
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 3650)),
+                  );
+                  if (date != null) {
+                    setDialogState(
+                      () => selected = DateTime(
+                        date.year,
+                        date.month,
+                        date.day,
+                        selected.hour,
+                        selected.minute,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Choose date'),
+              ),
+              OutlinedButton(
+                onPressed: () async {
+                  final time = await showTimePicker(
+                    context: context,
+                    initialTime: TimeOfDay.fromDateTime(selected),
+                  );
+                  if (time != null) {
+                    setDialogState(
+                      () => selected = DateTime(
+                        selected.year,
+                        selected.month,
+                        selected.day,
+                        time.hour,
+                        time.minute,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Choose time'),
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: zone,
+                decoration: const InputDecoration(labelText: 'Timezone'),
+                items:
+                    const <String>[
+                          'UTC',
+                          'America/Los_Angeles',
+                          'America/New_York',
+                          'Europe/London',
+                          'Australia/Sydney',
+                        ]
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(value),
+                          ),
+                        )
+                        .toList(),
+                onChanged: (value) =>
+                    setDialogState(() => zone = value ?? zone),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (accepted != true || !mounted) return;
+    final scheduled = ReminderWorkflow.resolveWallClock(
+      year: selected.year,
+      month: selected.month,
+      day: selected.day,
+      hour: selected.hour,
+      minute: selected.minute,
+      timeZoneId: zone,
+    );
+    final workflow = ReminderWorkflow(_repository!, widget.notificationGateway);
+    ReminderResult? result;
+    final saved = await _run(
+      () async {
+        if (existing == null) {
+          result = await workflow.create(
+            cuttingId: cutting.id,
+            scheduledForUtc: scheduled,
+            timeZoneId: zone,
+          );
+        } else {
+          await workflow.edit(existing, scheduled, zone);
+        }
+      },
+      selectParent: cutting.parentId,
+      selectCutting: cutting.id,
+    );
+    if (saved && result?.notificationsEnabled == false && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Notification permission was not granted. Your check-in remains available in the app.',
+          ),
+        ),
+      );
+    }
+  }
+
+  String _dueLabel(Reminder reminder) {
+    final now = DateTime.now().toUtc();
+    if (reminder.scheduledForUtc.isBefore(now)) return 'Overdue check-in';
+    return 'Upcoming check-in';
   }
 
   Widget _field(
@@ -693,6 +1102,9 @@ final class _JournalHomePageState extends State<JournalHomePage> {
 
   String _dateTime(DateTime value) =>
       value.toLocal().toIso8601String().replaceFirst('T', ' ').substring(0, 16);
+
+  String _wallDateTime(DateTime value) =>
+      value.toIso8601String().replaceFirst('T', ' ').substring(0, 16);
 }
 
 final class _StatusTile extends StatelessWidget {

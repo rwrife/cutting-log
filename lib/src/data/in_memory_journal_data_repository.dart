@@ -7,6 +7,7 @@ final class InMemoryJournalDataRepository implements JournalDataRepository {
   final _parents = <EntityId, ParentPlant>{};
   final _cuttings = <EntityId, Cutting>{};
   final _events = <EntityId, CuttingEvent>{};
+  final _reminders = <EntityId, Reminder>{};
 
   @override
   Future<void> createParentPlant(ParentPlant value) async {
@@ -148,11 +149,32 @@ final class InMemoryJournalDataRepository implements JournalDataRepository {
   @override
   Future<List<MediaAsset>> getMediaAssets(EntityId id) async => const [];
   @override
-  Future<void> createReminder(Reminder reminder) async =>
-      throw UnsupportedError('Reminders are not part of the capture workflow');
+  Future<void> createReminder(Reminder reminder) async {
+    if (!_cuttings.containsKey(reminder.cuttingId)) {
+      throw const JournalNotFoundException('cutting does not exist');
+    }
+    if (_reminders.containsKey(reminder.id)) {
+      throw const JournalConflictException('duplicate reminder ID');
+    }
+    _reminders[reminder.id] = reminder;
+  }
+
   @override
-  Future<List<Reminder>> getReminders(EntityId id) async => const [];
+  Future<List<Reminder>> getReminders(EntityId id) async =>
+      _reminders.values.where((reminder) => reminder.cuttingId == id).toList()
+        ..sort((a, b) {
+          final scheduled = a.scheduledForUtc.compareTo(b.scheduledForUtc);
+          return scheduled != 0 ? scheduled : a.id.compareTo(b.id);
+        });
   @override
-  Future<void> updateReminder(Reminder reminder) async =>
-      throw UnsupportedError('Reminders are not part of the capture workflow');
+  Future<void> updateReminder(Reminder reminder) async {
+    final previous = _reminders[reminder.id];
+    if (previous == null) {
+      throw const JournalNotFoundException('reminder does not exist');
+    }
+    if (!Reminder.canTransition(previous.status, reminder.status)) {
+      throw const JournalTransitionException('invalid reminder transition');
+    }
+    _reminders[reminder.id] = reminder;
+  }
 }

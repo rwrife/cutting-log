@@ -1,5 +1,6 @@
 import 'package:cutting_log/src/app.dart';
 import 'package:cutting_log/src/data/in_memory_journal_data_repository.dart';
+import 'package:cutting_log/src/domain/journal_entities.dart';
 import 'package:cutting_log/src/domain/journal_overview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -132,6 +133,71 @@ void main() {
     expect(find.textContaining('Parent nickname'), findsOneWidget);
     expect(tester.widget<TextField>(parentField).controller?.text, invalidName);
     expect(await repository.getParentPlants(), isEmpty);
+  });
+
+  testWidgets('review and due state remain readable without motion or color', (
+    tester,
+  ) async {
+    final repository = InMemoryJournalDataRepository();
+    final now = DateTime.now().toUtc();
+    final parent = ParentPlant(
+      id: EntityId('review-parent'),
+      nickname: 'Review parent',
+      createdAtUtc: now.subtract(const Duration(days: 2)),
+      updatedAtUtc: now,
+    );
+    final cutting = Cutting(
+      id: EntityId('review-cutting'),
+      parentId: parent.id,
+      name: 'Review cutting',
+      method: 'stem',
+      tags: const <String>['window'],
+      startedAtUtc: now.subtract(const Duration(days: 2)),
+      createdAtUtc: now.subtract(const Duration(days: 2)),
+      updatedAtUtc: now,
+    );
+    await repository.createParentPlant(parent);
+    await repository.createCutting(cutting);
+    await repository.createReminder(
+      Reminder(
+        id: EntityId('review-reminder'),
+        cuttingId: cutting.id,
+        scheduledForUtc: now.subtract(const Duration(hours: 1)),
+        timeZoneId: 'UTC',
+        status: ReminderStatus.pending,
+        createdAtUtc: now.subtract(const Duration(days: 1)),
+        updatedAtUtc: now.subtract(const Duration(days: 1)),
+      ),
+    );
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(
+          textScaler: TextScaler.linear(1.5),
+          disableAnimations: true,
+        ),
+        child: CuttingLogApp(
+          overview: const JournalOverview(
+            parentPlantCount: 1,
+            activeCuttingCount: 1,
+          ),
+          dataRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Review active cuttings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review cutting'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel(RegExp('Overdue check-in')),
+      findsAtLeastNWidgets(1),
+    );
+    expect(find.textContaining('Overdue check-in'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
   });
 }
 
