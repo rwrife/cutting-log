@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:cutting_log/src/application/capture_workflow.dart';
+import 'package:cutting_log/src/application/media_workflow.dart';
 import 'package:cutting_log/src/application/reminder_workflow.dart';
 import 'package:cutting_log/src/application/review_models.dart';
 import 'package:cutting_log/src/application/review_workflow.dart';
@@ -14,12 +17,14 @@ final class JournalHomePage extends StatefulWidget {
     required this.overview,
     this.dataRepository,
     this.notificationGateway = const DisabledLocalNotificationGateway(),
+    this.mediaWorkflow,
     super.key,
   });
 
   final JournalOverview overview;
   final JournalDataRepository? dataRepository;
   final LocalNotificationGateway notificationGateway;
+  final MediaWorkflow? mediaWorkflow;
 
   @override
   State<JournalHomePage> createState() => _JournalHomePageState();
@@ -36,11 +41,13 @@ final class _JournalHomePageState extends State<JournalHomePage> {
   final _tags = TextEditingController();
   final _initialNote = TextEditingController();
   final _eventNote = TextEditingController();
+  final _photoCaption = TextEditingController();
   final _search = TextEditingController();
 
   List<ParentPlant> _parents = const <ParentPlant>[];
   List<Cutting> _cuttings = const <Cutting>[];
   List<CuttingEvent> _events = const <CuttingEvent>[];
+  Map<EntityId, List<MediaAsset>> _mediaByEvent = const <EntityId, List<MediaAsset>>{};
   List<Reminder> _reminders = const <Reminder>[];
   List<ReviewItem> _reviewItems = const <ReviewItem>[];
   List<SiblingSummary> _siblings = const <SiblingSummary>[];
@@ -56,10 +63,12 @@ final class _JournalHomePageState extends State<JournalHomePage> {
   bool _loading = true;
   bool _saving = false;
   String? _error;
+  MediaStorageReport? _mediaReport;
 
   JournalDataRepository? get _repository => widget.dataRepository;
   CaptureWorkflow? get _workflow =>
       _repository == null ? null : CaptureWorkflow(_repository!);
+  MediaWorkflow? get _mediaWorkflow => widget.mediaWorkflow;
 
   @override
   void initState() {
@@ -80,6 +89,7 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       _tags,
       _initialNote,
       _eventNote,
+      _photoCaption,
       _search,
     ]) {
       controller.dispose();
@@ -107,6 +117,10 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       final events = cutting == null
           ? const <CuttingEvent>[]
           : await repository.getCuttingEvents(cutting.id);
+      final mediaByEvent = <EntityId, List<MediaAsset>>{};
+      for (final event in events) {
+        mediaByEvent[event.id] = await repository.getMediaAssets(event.id);
+      }
       final reminders = cutting == null
           ? const <Reminder>[]
           : await repository.getReminders(cutting.id);
@@ -125,6 +139,9 @@ final class _JournalHomePageState extends State<JournalHomePage> {
         ),
         nowUtc: DateTime.now().toUtc(),
       );
+      final mediaReport = _mediaWorkflow == null
+          ? null
+          : await _mediaWorkflow!.inspectStorage();
       if (!mounted) return;
       setState(() {
         _parents = parents;
@@ -132,9 +149,11 @@ final class _JournalHomePageState extends State<JournalHomePage> {
         _cuttings = cuttings;
         _cutting = cutting;
         _events = events;
+        _mediaByEvent = mediaByEvent;
         _reminders = reminders;
         _siblings = siblings;
         _reviewItems = reviewItems;
+        _mediaReport = mediaReport;
         _loading = false;
         _error = null;
       });
@@ -192,6 +211,7 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       return name == null ? reason : '${_fieldLabel(name)} $reason.';
     }
     if (error is JournalRepositoryException) return error.message;
+    if (error is MediaImportException) return error.message;
     if (error is StateError) return error.message;
     return fallback;
   }
@@ -231,6 +251,7 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       _parent = parent;
       _cutting = null;
       _events = const <CuttingEvent>[];
+      _mediaByEvent = const <EntityId, List<MediaAsset>>{};
     });
     await _reload(selectParent: parent.id);
   }
@@ -289,6 +310,108 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       selectCutting: cutting.id,
     );
     if (saved) _eventNote.clear();
+  }
+
+  Future<void> _attachPhotoToLatestEvent(PhotoImportSource source) async {
+    final mediaWorkflow = _mediaWorkflow;
+    final cutting = _cutting;
+    if (mediaWorkflow == null || cutting == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Photo import is unavailable.')),
+        );
+      }
+      return;
+    }
+    if (_events.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Add an event before attaching a photo.')),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final targetEvent = _events.last;
+    try {
+      final result = await mediaWorkflow.attachPhotoToEvent(
+        eventId: targetEvent.id,
+        source: source,
+        caption: _photoCaption.text,
+      );
+      await _reload(selectParent: cutting.parentId, selectCutting: cutting.id);
+      if (!mounted) return;
+      setState(() => _saving = false);
+      if (result == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Photo selection canceled.')));
+        return;
+      }
+      _photoCaption.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Photo attached to the latest timeline event.')),
+      );
+    } on MediaPermissionDeniedException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error =
+            'Permission denied. You can enable ${error.permission.name} later in system settings.';
+      });
+    } on MediaImportException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = error.message;
+      });
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = 'Could not attach photo. Try again.';
+      });
+    }
+  }
+
+  Future<void> _deletePhoto(MediaAsset asset) async {
+    final mediaWorkflow = _mediaWorkflow;
+    final cutting = _cutting;
+    if (mediaWorkflow == null || cutting == null) return;
+    await _run(() => mediaWorkflow.deleteMediaAsset(asset.id),
+        selectParent: cutting.parentId, selectCutting: cutting.id);
+  }
+
+  Future<void> _clearAllLocalMedia() async {
+    final mediaWorkflow = _mediaWorkflow;
+    final cutting = _cutting;
+    if (mediaWorkflow == null || cutting == null) return;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove all local media?'),
+        content: const Text(
+          'This deletes all locally stored photo files and media references from this device.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove all'),
+          ),
+        ],
+      ),
+    );
+    if (approved != true) return;
+    await _run(() => mediaWorkflow.clearAllLocalMedia(),
+        selectParent: cutting.parentId, selectCutting: cutting.id);
   }
 
   Future<void> _changeStage(CuttingStage stage) async {
@@ -554,18 +677,26 @@ final class _JournalHomePageState extends State<JournalHomePage> {
           icon: const Icon(Icons.calendar_today_outlined),
           label: Text('Start date: ${_date(_startedAt)}'),
         ),
-        OutlinedButton.icon(
-          onPressed: _saving
-              ? null
-              : () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Photos are optional and will be available in a later update.',
-                    ),
-                  ),
-                ),
-          icon: const Icon(Icons.add_a_photo_outlined),
-          label: const Text('Add photo (optional)'),
+        MenuAnchor(
+          builder: (context, controller, child) => OutlinedButton.icon(
+            onPressed: _saving || _cutting == null || _mediaWorkflow == null
+                ? null
+                : controller.open,
+            icon: const Icon(Icons.add_a_photo_outlined),
+            label: const Text('Add photo (optional)'),
+          ),
+          menuChildren: <Widget>[
+            MenuItemButton(
+              onPressed: () => _attachPhotoToLatestEvent(
+                PhotoImportSource.photoLibrary,
+              ),
+              child: const Text('From photo library'),
+            ),
+            MenuItemButton(
+              onPressed: () => _attachPhotoToLatestEvent(PhotoImportSource.camera),
+              child: const Text('Use camera'),
+            ),
+          ],
         ),
         FilledButton(
           key: const ValueKey<String>('start-cutting'),
@@ -601,6 +732,36 @@ final class _JournalHomePageState extends State<JournalHomePage> {
               : 'Stage: ${_label(state.stage.name)} • Outcome: ${_label(state.outcome.name)}',
         ),
         const SizedBox(height: 12),
+        _field(
+          _photoCaption,
+          'Photo caption (optional)',
+          maxLines: 2,
+        ),
+        if (_mediaReport != null)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Local media: ${_mediaReport!.assetCount} assets • ${_mediaReport!.trackedBytes} bytes',
+                  ),
+                  if (_mediaReport!.missingReferences.isNotEmpty)
+                    Text(
+                      'Missing files: ${_mediaReport!.missingReferences.length}',
+                    ),
+                  if (_mediaReport!.orphanedFiles.isNotEmpty)
+                    Text('Orphan files: ${_mediaReport!.orphanedFiles.length}'),
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: _saving ? null : _clearAllLocalMedia,
+                    child: const Text('Remove all local media'),
+                  ),
+                ],
+              ),
+            ),
+          ),
         if (_events.isEmpty)
           const Text('No timeline events yet.')
         else
@@ -612,11 +773,11 @@ final class _JournalHomePageState extends State<JournalHomePage> {
                   semanticLabel: _eventTitle(event),
                 ),
                 title: Text(_eventTitle(event)),
-                subtitle: Text(
-                  '${_dateTime(event.occurredAtUtc)}${event.note.isEmpty ? '' : '\n${event.note}'}${superseded.contains(event.id) ? '\nCorrected — retained for history' : ''}',
+                subtitle: _eventDetails(
+                  event,
+                  superseded: superseded.contains(event.id),
                 ),
-                isThreeLine:
-                    event.note.isNotEmpty || superseded.contains(event.id),
+                isThreeLine: false,
                 trailing:
                     superseded.contains(event.id) ||
                         event.correctsEventId != null
@@ -680,6 +841,112 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       ],
     );
   }
+
+  Widget _eventDetails(CuttingEvent event, {required bool superseded}) {
+    final assets = _mediaByEvent[event.id] ?? const <MediaAsset>[];
+    final details = StringBuffer(_dateTime(event.occurredAtUtc));
+    if (event.note.isNotEmpty) {
+      details.write('\n${event.note}');
+    }
+    if (superseded) {
+      details.write('\nCorrected — retained for history');
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(details.toString()),
+        if (assets.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text('No photo attached.'),
+          )
+        else
+          for (final asset in assets)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  _eventMediaPreview(asset),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(() {
+                      final capturedAt = asset.capturedAtUtc;
+                      if (asset.caption.trim().isNotEmpty) {
+                        return asset.caption;
+                      }
+                      return capturedAt == null
+                          ? 'Photo imported to local storage'
+                          : 'Photo captured ${_dateTime(capturedAt)}';
+                    }()),
+                  ),
+                  IconButton(
+                    tooltip: 'Remove photo',
+                    onPressed: _saving ? null : () => _deletePhoto(asset),
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
+              ),
+            ),
+      ],
+    );
+  }
+
+  Widget _eventMediaPreview(MediaAsset asset) {
+    final workflow = _mediaWorkflow;
+    if (workflow == null) {
+      return _unavailableMediaTile('Photo preview unavailable');
+    }
+    final thumbnail = workflow.thumbnailFileFor(asset);
+    final original = workflow.originalFileFor(asset);
+    final label = asset.caption.trim().isEmpty
+        ? 'Timeline photo preview'
+        : 'Timeline photo preview: ${asset.caption}';
+
+    return Semantics(
+      image: true,
+      label: label,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.file(
+          thumbnail,
+          width: 72,
+          height: 72,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _unavailableMediaTile(
+            original.existsSync()
+                ? 'Preview unavailable'
+                : 'Image unavailable on this device',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _unavailableMediaTile(String label) => Container(
+    width: 72,
+    height: 72,
+    padding: const EdgeInsets.all(6),
+    decoration: BoxDecoration(
+      border: Border.all(color: Theme.of(context).colorScheme.outline),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        const Icon(Icons.broken_image_outlined),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall,
+        ),
+      ],
+    ),
+  );
 
   Widget _reviewSection() {
     final tags =

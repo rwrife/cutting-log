@@ -192,10 +192,30 @@ final class DriftJournalRepository implements JournalDataRepository {
   }
 
   @override
+  Future<MediaAsset?> getMediaAsset(EntityId id) async {
+    final row = await (_database.select(
+      _database.mediaAssets,
+    )..where((table) => table.id.equals(id.value))).getSingleOrNull();
+    return row == null ? null : _mediaAsset(row);
+  }
+
+  @override
   Future<List<MediaAsset>> getMediaAssets(EntityId eventId) async {
     final rows =
         await (_database.select(_database.mediaAssets)
               ..where((table) => table.eventId.equals(eventId.value))
+              ..orderBy(<OrderingTerm Function(MediaAssets)>[
+                (table) => OrderingTerm.asc(table.importedAtUtc),
+                (table) => OrderingTerm.asc(table.id),
+              ]))
+            .get();
+    return rows.map(_mediaAsset).toList(growable: false);
+  }
+
+  @override
+  Future<List<MediaAsset>> getAllMediaAssets() async {
+    final rows =
+        await (_database.select(_database.mediaAssets)
               ..orderBy(<OrderingTerm Function(MediaAssets)>[
                 (table) => OrderingTerm.asc(table.importedAtUtc),
                 (table) => OrderingTerm.asc(table.id),
@@ -341,6 +361,18 @@ final class DriftJournalRepository implements JournalDataRepository {
           ..where((table) => table.id.equals(reminder.id.value)))
         .write(_reminderCompanion(reminder));
   });
+
+  @override
+  Future<void> removeMediaAsset(EntityId id) async {
+    await (_database.delete(
+      _database.mediaAssets,
+    )..where((table) => table.id.equals(id.value))).go();
+  }
+
+  @override
+  Future<void> removeAllMediaAssets() async {
+    await _database.delete(_database.mediaAssets).go();
+  }
 
   Future<void> _appendEvent(CuttingEvent event) async {
     await _ensureAbsent(
