@@ -7,6 +7,7 @@ final class InMemoryJournalDataRepository implements JournalDataRepository {
   final _parents = <EntityId, ParentPlant>{};
   final _cuttings = <EntityId, Cutting>{};
   final _events = <EntityId, CuttingEvent>{};
+  final _media = <EntityId, MediaAsset>{};
   final _reminders = <EntityId, Reminder>{};
 
   @override
@@ -144,10 +145,35 @@ final class InMemoryJournalDataRepository implements JournalDataRepository {
   }
 
   @override
-  Future<void> addMediaAsset(MediaAsset asset) async =>
-      throw UnsupportedError('Media is not part of the capture workflow');
+  Future<void> addMediaAsset(MediaAsset asset) async {
+    if (!_events.containsKey(asset.eventId)) {
+      throw const JournalNotFoundException('event does not exist');
+    }
+    if (_media.containsKey(asset.id)) {
+      throw const JournalConflictException('duplicate media ID');
+    }
+    _media[asset.id] = asset;
+  }
+
   @override
-  Future<List<MediaAsset>> getMediaAssets(EntityId id) async => const [];
+  Future<MediaAsset?> getMediaAsset(EntityId id) async => _media[id];
+
+  @override
+  Future<List<MediaAsset>> getMediaAssets(EntityId id) async =>
+      _media.values.where((asset) => asset.eventId == id).toList(growable: false)
+        ..sort((a, b) {
+          final imported = a.importedAtUtc.compareTo(b.importedAtUtc);
+          return imported != 0 ? imported : a.id.compareTo(b.id);
+        });
+
+  @override
+  Future<List<MediaAsset>> getAllMediaAssets() async =>
+      _media.values.toList(growable: false)
+        ..sort((a, b) {
+          final imported = a.importedAtUtc.compareTo(b.importedAtUtc);
+          return imported != 0 ? imported : a.id.compareTo(b.id);
+        });
+
   @override
   Future<void> createReminder(Reminder reminder) async {
     if (!_cuttings.containsKey(reminder.cuttingId)) {
@@ -176,5 +202,15 @@ final class InMemoryJournalDataRepository implements JournalDataRepository {
       throw const JournalTransitionException('invalid reminder transition');
     }
     _reminders[reminder.id] = reminder;
+  }
+
+  @override
+  Future<void> removeMediaAsset(EntityId id) async {
+    _media.remove(id);
+  }
+
+  @override
+  Future<void> removeAllMediaAssets() async {
+    _media.clear();
   }
 }

@@ -48,7 +48,11 @@ abstract interface class JournalDataRepository {
 
   Future<List<CuttingEvent>> getCuttingEvents(EntityId cuttingId);
 
+  Future<MediaAsset?> getMediaAsset(EntityId id);
+
   Future<List<MediaAsset>> getMediaAssets(EntityId eventId);
+
+  Future<List<MediaAsset>> getAllMediaAssets();
 
   Future<ParentPlant?> getParentPlant(EntityId id);
 
@@ -61,4 +65,8 @@ abstract interface class JournalDataRepository {
   Future<void> updateParentPlant(ParentPlant parent);
 
   Future<void> updateReminder(Reminder reminder);
+
+  Future<void> removeMediaAsset(EntityId id);
+
+  Future<void> removeAllMediaAssets();
 }

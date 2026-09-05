@@ -104,14 +104,15 @@ Cutting Log is a personal observation journal, not a botanical diagnostic, treat
 
 ## Status and milestones
 
-**Current status: local capture, review, and check-in workflows.** The offline, account-free app stores parents, linked cuttings, observations, stage changes, outcomes, corrections, and archives in its versioned app-private Drift/SQLite database. It adds accessible review filters, factual sibling summaries, and a permission-safe local check-in due list. Repository-owned tests and Android/iOS CI builds are present. Owned photos, portability, signed packages, physical-device evidence, screenshots, and store releases do not exist yet.
+**Current status: local capture, review, check-in, and owned-photo workflows.** The offline, account-free app stores parents, linked cuttings, observations, stage changes, outcomes, corrections, archives, and media metadata in its versioned app-private Drift/SQLite database. It adds accessible review filters, factual sibling summaries, a permission-safe local check-in due list, and app-private photo import with generated thumbnails plus per-asset/all-media cleanup controls. Repository-owned tests and Android/iOS CI builds are present. Export/restore portability, signed packages, physical-device evidence, screenshots, and store releases do not exist yet.
 
 1. Bootstrap Flutter packages and CI.
 2. Implement the event-based local domain and persistence layer.
 3. Deliver the parent → cutting → observation workflow.
 4. Add accessible review, filtering, reminders, and sibling summaries.
-5. Add media ownership, export/restore, and privacy controls.
-6. Verify Android/iOS builds and package an evidence-backed first release.
+5. Add media ownership and privacy controls.
+6. Add export/restore portability workflows.
+7. Verify Android/iOS builds and package an evidence-backed first release.
 
 See [PLAN.md](PLAN.md) and the issue tracker for executable work.
 
