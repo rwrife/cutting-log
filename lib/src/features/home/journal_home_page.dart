@@ -5,11 +5,13 @@ import 'package:cutting_log/src/application/media_workflow.dart';
 import 'package:cutting_log/src/application/reminder_workflow.dart';
 import 'package:cutting_log/src/application/review_models.dart';
 import 'package:cutting_log/src/application/review_workflow.dart';
+import 'package:cutting_log/src/data/app_private_media_store.dart';
 import 'package:cutting_log/src/domain/journal_data_repository.dart';
 import 'package:cutting_log/src/domain/journal_entities.dart';
 import 'package:cutting_log/src/domain/journal_overview.dart';
 import 'package:cutting_log/src/domain/startup_policy.dart';
 import 'package:cutting_log/src/platform/local_notification_gateway.dart';
+import 'package:cutting_log/src/platform/photo_import_gateway.dart';
 import 'package:flutter/material.dart';
 
 final class JournalHomePage extends StatefulWidget {
@@ -47,7 +49,8 @@ final class _JournalHomePageState extends State<JournalHomePage> {
   List<ParentPlant> _parents = const <ParentPlant>[];
   List<Cutting> _cuttings = const <Cutting>[];
   List<CuttingEvent> _events = const <CuttingEvent>[];
-  Map<EntityId, List<MediaAsset>> _mediaByEvent = const <EntityId, List<MediaAsset>>{};
+  Map<EntityId, List<MediaAsset>> _mediaByEvent =
+      const <EntityId, List<MediaAsset>>{};
   List<Reminder> _reminders = const <Reminder>[];
   List<ReviewItem> _reviewItems = const <ReviewItem>[];
   List<SiblingSummary> _siblings = const <SiblingSummary>[];
@@ -326,7 +329,9 @@ final class _JournalHomePageState extends State<JournalHomePage> {
     if (_events.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Add an event before attaching a photo.')),
+          const SnackBar(
+            content: Text('Add an event before attaching a photo.'),
+          ),
         );
       }
       return;
@@ -347,14 +352,16 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       if (!mounted) return;
       setState(() => _saving = false);
       if (result == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Photo selection canceled.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Photo selection canceled.')),
+        );
         return;
       }
       _photoCaption.clear();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Photo attached to the latest timeline event.')),
+        const SnackBar(
+          content: Text('Photo attached to the latest timeline event.'),
+        ),
       );
     } on MediaPermissionDeniedException catch (error) {
       if (!mounted) return;
@@ -382,8 +389,11 @@ final class _JournalHomePageState extends State<JournalHomePage> {
     final mediaWorkflow = _mediaWorkflow;
     final cutting = _cutting;
     if (mediaWorkflow == null || cutting == null) return;
-    await _run(() => mediaWorkflow.deleteMediaAsset(asset.id),
-        selectParent: cutting.parentId, selectCutting: cutting.id);
+    await _run(
+      () => mediaWorkflow.deleteMediaAsset(asset.id),
+      selectParent: cutting.parentId,
+      selectCutting: cutting.id,
+    );
   }
 
   Future<void> _clearAllLocalMedia() async {
@@ -410,8 +420,11 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       ),
     );
     if (approved != true) return;
-    await _run(() => mediaWorkflow.clearAllLocalMedia(),
-        selectParent: cutting.parentId, selectCutting: cutting.id);
+    await _run(
+      () => mediaWorkflow.clearAllLocalMedia(),
+      selectParent: cutting.parentId,
+      selectCutting: cutting.id,
+    );
   }
 
   Future<void> _changeStage(CuttingStage stage) async {
@@ -687,13 +700,13 @@ final class _JournalHomePageState extends State<JournalHomePage> {
           ),
           menuChildren: <Widget>[
             MenuItemButton(
-              onPressed: () => _attachPhotoToLatestEvent(
-                PhotoImportSource.photoLibrary,
-              ),
+              onPressed: () =>
+                  _attachPhotoToLatestEvent(PhotoImportSource.photoLibrary),
               child: const Text('From photo library'),
             ),
             MenuItemButton(
-              onPressed: () => _attachPhotoToLatestEvent(PhotoImportSource.camera),
+              onPressed: () =>
+                  _attachPhotoToLatestEvent(PhotoImportSource.camera),
               child: const Text('Use camera'),
             ),
           ],
@@ -732,11 +745,7 @@ final class _JournalHomePageState extends State<JournalHomePage> {
               : 'Stage: ${_label(state.stage.name)} • Outcome: ${_label(state.outcome.name)}',
         ),
         const SizedBox(height: 12),
-        _field(
-          _photoCaption,
-          'Photo caption (optional)',
-          maxLines: 2,
-        ),
+        _field(_photoCaption, 'Photo caption (optional)', maxLines: 2),
         if (_mediaReport != null)
           Card(
             child: Padding(

@@ -58,18 +58,14 @@ final class MediaStorageReport {
 }
 
 final class MediaWorkflow {
-  MediaWorkflow({
-    required JournalDataRepository repository,
-    required OptionalPermissionGateway permissions,
-    required PhotoImportGateway sourceGateway,
-    required OwnedMediaStore mediaStore,
+  MediaWorkflow(
+    this._repository,
+    this._permissions,
+    this._sourceGateway,
+    this._mediaStore, {
     DateTime Function()? clock,
     String Function()? idFactory,
-  }) : _repository = repository,
-       _permissions = permissions,
-       _sourceGateway = sourceGateway,
-       _mediaStore = mediaStore,
-       _clock = clock ?? _utcNow,
+  }) : _clock = clock ?? _utcNow,
        _idFactory = idFactory ?? _defaultIdFactory;
 
   final JournalDataRepository _repository;

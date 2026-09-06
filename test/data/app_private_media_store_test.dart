@@ -72,19 +72,22 @@ void main() {
     expect(inventory.files, isEmpty);
   });
 
-  test('fails hash verification when expected hash does not match source', () async {
-    final source = await _writePng(root, 'hash.png');
-    final store = AppPrivateMediaStore(root);
+  test(
+    'fails hash verification when expected hash does not match source',
+    () async {
+      final source = await _writePng(root, 'hash.png');
+      final store = AppPrivateMediaStore(root);
 
-    expect(
-      () => store.importImage(
-        assetId: 'asset-5',
-        sourcePath: source.path,
-        expectedSourceSha256: 'deadbeef',
-      ),
-      throwsA(isA<HashMismatchMediaException>()),
-    );
-  });
+      expect(
+        () => store.importImage(
+          assetId: 'asset-5',
+          sourcePath: source.path,
+          expectedSourceSha256: 'deadbeef',
+        ),
+        throwsA(isA<HashMismatchMediaException>()),
+      );
+    },
+  );
 
   test('cleans staging files when finalization is interrupted', () async {
     final source = await _writePng(root, 'interrupt.png');
@@ -98,7 +101,9 @@ void main() {
       throwsA(isA<StateError>()),
     );
 
-    final staging = Directory('${root.path}/${AppPrivateMediaStore.stagingDir}');
+    final staging = Directory(
+      '${root.path}/${AppPrivateMediaStore.stagingDir}',
+    );
     if (await staging.exists()) {
       expect(await staging.list().isEmpty, isTrue);
     }

@@ -252,9 +252,8 @@ final class AppPrivateMediaStore implements OwnedMediaStore {
 
   Future<void> _ensureDirectories() async {
     for (final relative in <String>[originalsDir, thumbnailsDir, stagingDir]) {
-      await Directory(
-        path.join(_rootDirectory.path, relative),
-      ).create(recursive: true);
+      await Directory(path.join(_rootDirectory.path, relative))
+          .create(recursive: true);
     }
   }
 

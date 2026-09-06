@@ -64,7 +64,9 @@ void main() {
     expect(assets.single.relativePath, startsWith('media/originals/'));
     expect(store.resolve(assets.single.relativePath).existsSync(), isTrue);
     expect(
-      store.resolve(workflow.thumbnailRelativePathForAsset(assets.single)).existsSync(),
+      store
+          .resolve(workflow.thumbnailRelativePathForAsset(assets.single))
+          .existsSync(),
       isTrue,
     );
   });
@@ -131,7 +133,7 @@ void main() {
 
     expect(
       () => workflow.attachPhotoToEvent(
-        eventId: const EntityId('missing-event'),
+        eventId: EntityId('missing-event'),
         source: PhotoImportSource.photoLibrary,
       ),
       throwsA(isA<JournalNotFoundException>()),
@@ -153,8 +155,11 @@ void main() {
     );
     final asset = attachment!.asset;
 
-    await store.deleteManagedPath(workflow.thumbnailRelativePathForAsset(asset));
-    await File('${root.path}/media/originals/orphan.jpg').create(recursive: true);
+    await store.deleteManagedPath(
+      workflow.thumbnailRelativePathForAsset(asset),
+    );
+    await File('${root.path}/media/originals/orphan.jpg')
+        .create(recursive: true);
 
     final report = await workflow.inspectStorage();
 
@@ -183,7 +188,10 @@ void main() {
 
     expect(await repository.getAllMediaAssets(), isEmpty);
     expect(await store.exists(asset.relativePath), isFalse);
-    expect(await store.exists(workflow.thumbnailRelativePathForAsset(asset)), isFalse);
+    expect(
+      await store.exists(workflow.thumbnailRelativePathForAsset(asset)),
+      isFalse,
+    );
   });
 
   test('clearAllLocalMedia removes tracked and orphan files', () async {
@@ -198,7 +206,8 @@ void main() {
       source: PhotoImportSource.photoLibrary,
     );
 
-    await File('${root.path}/media/thumbnails/orphan.jpg').create(recursive: true);
+    await File('${root.path}/media/thumbnails/orphan.jpg')
+        .create(recursive: true);
     await workflow.clearAllLocalMedia();
 
     expect(await repository.getAllMediaAssets(), isEmpty);
@@ -211,11 +220,12 @@ class _FakePermissionGateway implements OptionalPermissionGateway {
   bool allowPhotos = true;
 
   @override
-  Future<bool> request(OptionalPermission permission) async => switch (permission) {
-    OptionalPermission.camera => allowCamera,
-    OptionalPermission.photos => allowPhotos,
-    OptionalPermission.notifications => true,
-  };
+  Future<bool> request(OptionalPermission permission) async =>
+      switch (permission) {
+        OptionalPermission.camera => allowCamera,
+        OptionalPermission.photos => allowPhotos,
+        OptionalPermission.notifications => true,
+      };
 }
 
 class _FakePhotoImportGateway implements PhotoImportGateway {
@@ -230,7 +240,11 @@ class _FakePhotoImportGateway implements PhotoImportGateway {
 }
 
 final class _Fixture {
-  const _Fixture({required this.parent, required this.cutting, required this.event});
+  const _Fixture({
+    required this.parent,
+    required this.cutting,
+    required this.event,
+  });
 
   final ParentPlant parent;
   final Cutting cutting;
@@ -240,7 +254,7 @@ final class _Fixture {
 Future<_Fixture> _seed(JournalDataRepository repository) async {
   final created = DateTime.utc(2026, 1, 1);
   final parent = ParentPlant(
-    id: const EntityId('parent-1'),
+    id: EntityId('parent-1'),
     nickname: 'Monstera Mother',
     createdAtUtc: created,
     updatedAtUtc: created,
@@ -248,7 +262,7 @@ Future<_Fixture> _seed(JournalDataRepository repository) async {
   await repository.createParentPlant(parent);
 
   final cutting = Cutting(
-    id: const EntityId('cutting-1'),
+    id: EntityId('cutting-1'),
     parentId: parent.id,
     name: 'Stem A',
     method: 'Stem',
@@ -257,7 +271,7 @@ Future<_Fixture> _seed(JournalDataRepository repository) async {
     updatedAtUtc: created,
   );
   final startEvent = CuttingEvent(
-    id: const EntityId('event-1'),
+    id: EntityId('event-1'),
     cuttingId: cutting.id,
     occurredAtUtc: created,
     createdAtUtc: created,

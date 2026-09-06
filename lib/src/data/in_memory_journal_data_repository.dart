@@ -160,7 +160,9 @@ final class InMemoryJournalDataRepository implements JournalDataRepository {
 
   @override
   Future<List<MediaAsset>> getMediaAssets(EntityId id) async =>
-      _media.values.where((asset) => asset.eventId == id).toList(growable: false)
+      _media.values
+          .where((asset) => asset.eventId == id)
+          .toList(growable: false)
         ..sort((a, b) {
           final imported = a.importedAtUtc.compareTo(b.importedAtUtc);
           return imported != 0 ? imported : a.id.compareTo(b.id);
@@ -168,11 +170,10 @@ final class InMemoryJournalDataRepository implements JournalDataRepository {
 
   @override
   Future<List<MediaAsset>> getAllMediaAssets() async =>
-      _media.values.toList(growable: false)
-        ..sort((a, b) {
-          final imported = a.importedAtUtc.compareTo(b.importedAtUtc);
-          return imported != 0 ? imported : a.id.compareTo(b.id);
-        });
+      _media.values.toList(growable: false)..sort((a, b) {
+        final imported = a.importedAtUtc.compareTo(b.importedAtUtc);
+        return imported != 0 ? imported : a.id.compareTo(b.id);
+      });
 
   @override
   Future<void> createReminder(Reminder reminder) async {

@@ -43,10 +43,10 @@ Future<void> main() async {
   }
 
   final mediaWorkflow = MediaWorkflow(
-    repository: repository,
-    permissions: permissions,
-    sourceGateway: photoImports,
-    mediaStore: AppPrivateMediaStore(mediaRoot),
+    repository,
+    permissions,
+    photoImports,
+    AppPrivateMediaStore(mediaRoot),
   );
 
   runApp(
