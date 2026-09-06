@@ -49,7 +49,10 @@ void main() {
     final source = await _writePng(root, 'large.png', width: 128, height: 128);
     final store = AppPrivateMediaStore(
       root,
-      policy: const MediaImportPolicy(maxSourceBytes: 1024 * 1024, maxImageDimension: 64),
+      policy: const MediaImportPolicy(
+        maxSourceBytes: 1024 * 1024,
+        maxImageDimension: 64,
+      ),
     );
 
     expect(
