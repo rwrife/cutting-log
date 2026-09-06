@@ -142,7 +142,12 @@ final class AppPrivateMediaStore implements OwnedMediaStore {
     }
 
     final format = _detectSourceFormat(sourceBytes, sourcePath);
-    final decoded = img.decodeImage(sourceBytes);
+    img.Image? decoded;
+    try {
+      decoded = img.decodeImage(sourceBytes);
+    } on Object {
+      throw const MalformedMediaException('failed to decode image');
+    }
     if (decoded == null) {
       throw const MalformedMediaException('failed to decode image');
     }
