@@ -27,10 +27,10 @@ void main() {
     picker = _FakePhotoImportGateway();
     store = AppPrivateMediaStore(root);
     workflow = MediaWorkflow(
-      repository: repository,
-      permissions: permissions,
-      sourceGateway: picker,
-      mediaStore: store,
+      repository,
+      permissions,
+      picker,
+      store,
       clock: () => DateTime.utc(2026, 1, 10),
       idFactory: _incrementingId,
     );

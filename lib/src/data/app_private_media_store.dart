@@ -31,19 +31,19 @@ class MediaImportException implements Exception {
 }
 
 final class OversizedMediaException extends MediaImportException {
-  const OversizedMediaException(String message) : super(message);
+  const OversizedMediaException(super.message);
 }
 
 final class UnsupportedMediaException extends MediaImportException {
-  const UnsupportedMediaException(String message) : super(message);
+  const UnsupportedMediaException(super.message);
 }
 
 final class MalformedMediaException extends MediaImportException {
-  const MalformedMediaException(String message) : super(message);
+  const MalformedMediaException(super.message);
 }
 
 final class HashMismatchMediaException extends MediaImportException {
-  const HashMismatchMediaException(String message) : super(message);
+  const HashMismatchMediaException(super.message);
 }
 
 final class ImportedOwnedMedia {
@@ -105,8 +105,8 @@ final class AppPrivateMediaStore implements OwnedMediaStore {
   AppPrivateMediaStore(
     this._rootDirectory, {
     this.policy = const MediaImportPolicy(),
-    void Function()? beforeFinalizeHook,
-  }) : _beforeFinalizeHook = beforeFinalizeHook;
+    this.beforeFinalizeHook,
+  });
 
   static const String mediaRoot = 'media';
   static const String originalsDir = 'media/originals';
@@ -115,7 +115,7 @@ final class AppPrivateMediaStore implements OwnedMediaStore {
 
   final Directory _rootDirectory;
   final MediaImportPolicy policy;
-  final void Function()? _beforeFinalizeHook;
+  final void Function()? beforeFinalizeHook;
 
   @override
   Future<ImportedOwnedMedia> importImage({
@@ -174,7 +174,7 @@ final class AppPrivateMediaStore implements OwnedMediaStore {
       }
       await stagedOriginal.writeAsBytes(originalBytes, flush: true);
       await stagedThumbnail.writeAsBytes(thumbnailBytes, flush: true);
-      _beforeFinalizeHook?.call();
+      beforeFinalizeHook?.call();
 
       await stagedOriginal.rename(finalOriginal.path);
       originalFinalized = true;
