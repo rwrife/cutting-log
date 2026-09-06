@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Capture optional timeline photos for your local cutting journal.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select optional timeline photos for your local cutting journal.</string>
 </dict>
 </plist>
