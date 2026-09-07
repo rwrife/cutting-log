@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rwrife/cutting-log/docs/export-schema-v1.json",
+  "title": "Cutting Log Journal Backup Schema v1",
+  "type": "object",
+  "required": [
+    "format",
+    "version",
+    "exportedAtUtc",
+    "parents",
+    "cuttings",
+    "events",
+    "mediaAssets",
+    "reminders"
+  ],
+  "properties": {
+    "format": { "const": "cutting-log-journal" },
+    "version": { "const": 1 },
+    "exportedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "parents": { "type": "array" },
+    "cuttings": { "type": "array" },
+    "events": { "type": "array" },
+    "mediaAssets": { "type": "array" },
+    "reminders": { "type": "array" }
+  },
+  "additionalProperties": false
+}

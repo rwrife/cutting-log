@@ -30,8 +30,11 @@ creating duplicates.
 
 - Archiving a parent or cutting updates archival metadata and does not delete lineage or history.
 - Parent deletion is restricted while cuttings reference it.
-- Cutting-owned tags, events, reminders, and event-owned media metadata are database children. A future explicit complete-delete use case may remove that aggregate transactionally; no background cleanup or implicit deletion is exposed in this milestone.
-- Media metadata deletion never proves that a media file was removed. Issue #5 must coordinate database metadata and app-private bytes as one failure-sensitive operation.
-- Full-library erase must eventually remove the closed database (including `-wal`/`-shm`) and owned media directory. Export and restore must treat all incoming paths and IDs as untrusted.
+- Cutting-owned tags, events, reminders, and event-owned media metadata are database children.
+- Export writes UTF-8 CSV files (stable columns, UTC timestamps) and a versioned ZIP backup containing `manifest.json`, canonical `journal.json`, `csv/*.csv`, and optional copied media.
+- Restore is defensive: it rejects absolute paths, traversal, symlinks, duplicate IDs, invalid relationships, unsupported backup versions, oversized archives, and SHA-256 mismatches before mutation.
+- Restore requires a preview (additions/conflicts/skips) and a conflict policy (`keepExisting`, `replaceExisting`, `failOnConflict`) before apply.
+- Full-library erase clears all journal tables, app-private copied media, app cache entries, and attempts to cancel app-owned pending reminder notification IDs.
+- Platform limitation: if Android or iOS has already copied app-private files into an OS-level/cloud device backup, local erase cannot retract those external snapshots.
 
 Schema version 1 is represented by `test/fixtures/schema_v1.sql`. Version 2 adds the reminder timezone identifier with a conservative `UTC` value for existing rows and creates query indexes. Migration runs with foreign keys enabled and is covered by a file-backed fixture test.
