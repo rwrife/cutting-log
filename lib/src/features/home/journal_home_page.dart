@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:cutting_log/src/application/capture_workflow.dart';
 import 'package:cutting_log/src/application/media_workflow.dart';
+import 'package:cutting_log/src/application/portability_workflow.dart';
 import 'package:cutting_log/src/application/reminder_workflow.dart';
 import 'package:cutting_log/src/application/review_models.dart';
 import 'package:cutting_log/src/application/review_workflow.dart';
@@ -18,6 +21,7 @@ final class JournalHomePage extends StatefulWidget {
     this.dataRepository,
     this.notificationGateway = const DisabledLocalNotificationGateway(),
     this.mediaWorkflow,
+    this.portabilityWorkflow,
     super.key,
   });
 
@@ -25,6 +29,7 @@ final class JournalHomePage extends StatefulWidget {
   final JournalDataRepository? dataRepository;
   final LocalNotificationGateway notificationGateway;
   final MediaWorkflow? mediaWorkflow;
+  final PortabilityWorkflow? portabilityWorkflow;
 
   @override
   State<JournalHomePage> createState() => _JournalHomePageState();
@@ -43,6 +48,7 @@ final class _JournalHomePageState extends State<JournalHomePage> {
   final _eventNote = TextEditingController();
   final _photoCaption = TextEditingController();
   final _search = TextEditingController();
+  final _restoreArchivePath = TextEditingController();
 
   List<ParentPlant> _parents = const <ParentPlant>[];
   List<Cutting> _cuttings = const <Cutting>[];
@@ -65,11 +71,15 @@ final class _JournalHomePageState extends State<JournalHomePage> {
   bool _saving = false;
   String? _error;
   MediaStorageReport? _mediaReport;
+  RestorePreview? _restorePreview;
+  RestoreConflictPolicy _restorePolicy = RestoreConflictPolicy.keepExisting;
+  String? _latestExportPath;
 
   JournalDataRepository? get _repository => widget.dataRepository;
   CaptureWorkflow? get _workflow =>
       _repository == null ? null : CaptureWorkflow(_repository!);
   MediaWorkflow? get _mediaWorkflow => widget.mediaWorkflow;
+  PortabilityWorkflow? get _portabilityWorkflow => widget.portabilityWorkflow;
 
   @override
   void initState() {
@@ -92,6 +102,7 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       _eventNote,
       _photoCaption,
       _search,
+      _restoreArchivePath,
     ]) {
       controller.dispose();
     }
@@ -213,8 +224,159 @@ final class _JournalHomePageState extends State<JournalHomePage> {
     }
     if (error is JournalRepositoryException) return error.message;
     if (error is MediaImportException) return error.message;
+    if (error is PortabilityException) return error.message;
     if (error is StateError) return error.message;
     return fallback;
+  }
+
+  Future<void> _exportLocalBackup() async {
+    final workflow = _portabilityWorkflow;
+    if (workflow == null) return;
+
+    PortabilityExportResult? result;
+    final saved = await _run(() async {
+      result = await workflow.exportLibrary(includeMedia: true);
+    });
+    if (!saved || !mounted || result == null) return;
+
+    setState(() {
+      _latestExportPath = result!.archiveFile.path;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Saved backup ZIP and CSV exports to app-private storage at ${result!.archiveFile.path}.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _previewRestore() async {
+    final workflow = _portabilityWorkflow;
+    if (workflow == null) return;
+    final archivePath = _restoreArchivePath.text.trim();
+    if (archivePath.isEmpty) {
+      setState(() {
+        _error = 'Enter a local backup ZIP path before previewing restore.';
+      });
+      return;
+    }
+
+    RestorePreview? preview;
+    final saved = await _run(() async {
+      preview = await workflow.previewRestoreArchive(File(archivePath));
+    });
+    if (!saved || !mounted || preview == null) return;
+    setState(() {
+      _restorePreview = preview;
+    });
+  }
+
+  Future<void> _applyRestore() async {
+    final workflow = _portabilityWorkflow;
+    final preview = _restorePreview;
+    if (workflow == null || preview == null) {
+      setState(() {
+        _error = 'Preview a restore archive first so additions/conflicts can be reviewed.';
+      });
+      return;
+    }
+
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Apply restore?'),
+        content: Text(
+          'Policy: ${_restorePolicy.name}. '
+          'Additions: ${preview.totalAdditions}. Conflicts: ${preview.totalConflicts}.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Apply restore'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return;
+
+    RestoreApplyResult? result;
+    final saved = await _run(() async {
+      result = await workflow.applyRestorePreview(
+        preview: preview,
+        conflictPolicy: _restorePolicy,
+      );
+    });
+    if (!saved || !mounted || result == null) return;
+
+    setState(() {
+      _restorePreview = null;
+      _parent = null;
+      _cutting = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Restore complete: ${result!.appliedParents} parents, '
+          '${result!.appliedCuttings} cuttings, ${result!.appliedEvents} events, '
+          '${result!.appliedMediaAssets} media assets, ${result!.appliedReminders} reminders.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _eraseLibrary() async {
+    final workflow = _portabilityWorkflow;
+    if (workflow == null) return;
+
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete full local library?'),
+        content: const Text(
+          'This erases local database records, copied media files, reminder links, and temporary cache data. '
+          'Some OS-level backups created outside this app may still exist until removed by the user.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete local library'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return;
+
+    EraseLibraryResult? result;
+    final saved = await _run(() async {
+      result = await workflow.eraseLibrary();
+    });
+    if (!saved || !mounted || result == null) return;
+
+    setState(() {
+      _parent = null;
+      _cutting = null;
+      _restorePreview = null;
+      _latestExportPath = null;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Deleted ${result!.parentsDeleted} parents, ${result!.cuttingsDeleted} cuttings, '
+          '${result!.eventsDeleted} events, ${result!.mediaAssetsDeleted} media assets, '
+          '${result!.remindersDeleted} reminders and ${result!.mediaFilesDeleted} media files.',
+        ),
+      ),
+    );
   }
 
   String _fieldLabel(String name) => switch (name) {
@@ -534,6 +696,8 @@ final class _JournalHomePageState extends State<JournalHomePage> {
                   const SizedBox(height: 24),
                   _timelineSection(),
                 ],
+                const SizedBox(height: 24),
+                _portabilitySection(),
               ],
               const SizedBox(height: 24),
               const Card(
@@ -560,6 +724,121 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       ],
     ),
   );
+
+  Widget _portabilitySection() {
+    final workflowAvailable = _portabilityWorkflow != null;
+    final preview = _restorePreview;
+    final potentialSkips = preview == null
+        ? 0
+        : preview.parents.potentialSkips +
+              preview.cuttings.potentialSkips +
+              preview.events.potentialSkips +
+              preview.mediaAssets.potentialSkips +
+              preview.reminders.potentialSkips;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              'Export, restore, and erase local data',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Backups can contain sensitive notes and photos. Cutting Log never uploads backups automatically; sharing/export is always user-initiated.',
+            ),
+            const SizedBox(height: 12),
+            if (!workflowAvailable)
+              const Text(
+                'Portability controls are unavailable in this runtime.',
+              )
+            else ...<Widget>[
+              FilledButton.icon(
+                onPressed: _saving ? null : _exportLocalBackup,
+                icon: const Icon(Icons.download_outlined),
+                label: const Text('Create local backup (ZIP + CSV)'),
+              ),
+              if (_latestExportPath != null) ...<Widget>[
+                const SizedBox(height: 8),
+                SelectableText('Latest export: $_latestExportPath'),
+              ],
+              const SizedBox(height: 16),
+              _field(_restoreArchivePath, 'Restore archive path (.zip)'),
+              DropdownButtonFormField<RestoreConflictPolicy>(
+                initialValue: _restorePolicy,
+                decoration: const InputDecoration(
+                  labelText: 'Conflict policy',
+                  border: OutlineInputBorder(),
+                ),
+                items: RestoreConflictPolicy.values
+                    .map(
+                      (value) => DropdownMenuItem<RestoreConflictPolicy>(
+                        value: value,
+                        child: Text(value.name),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: _saving
+                    ? null
+                    : (value) {
+                        if (value == null) return;
+                        setState(() => _restorePolicy = value);
+                      },
+              ),
+              if (preview != null) ...<Widget>[
+                const SizedBox(height: 12),
+                Text(
+                  'Restore preview — additions: ${preview.totalAdditions}, conflicts: ${preview.totalConflicts}, potential skips: $potentialSkips.',
+                ),
+                Text(
+                  'Parents +${preview.parents.additions}/${preview.parents.conflicts} conflicts · '
+                  'Cuttings +${preview.cuttings.additions}/${preview.cuttings.conflicts} · '
+                  'Events +${preview.events.additions}/${preview.events.conflicts} · '
+                  'Media +${preview.mediaAssets.additions}/${preview.mediaAssets.conflicts} · '
+                  'Reminders +${preview.reminders.additions}/${preview.reminders.conflicts}',
+                ),
+              ],
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: <Widget>[
+                  OutlinedButton.icon(
+                    onPressed: _saving ? null : _previewRestore,
+                    icon: const Icon(Icons.preview_outlined),
+                    label: const Text('Preview restore'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _saving || preview == null
+                        ? null
+                        : _applyRestore,
+                    icon: const Icon(Icons.system_update_alt_outlined),
+                    label: const Text('Apply restore'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Restore hardening: archive paths are validated (no absolute/traversal/symlink entries), size limits guard decompression bombs, and record/hash validation happens before mutation.',
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _saving ? null : _eraseLibrary,
+                icon: const Icon(Icons.delete_forever_outlined),
+                label: const Text('Delete full local library'),
+              ),
+            ],
+            const SizedBox(height: 8),
+            const Text(
+              'Platform note: deleting local data cannot retroactively remove copies that may already exist in external OS/cloud backups.',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _parentSection() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,

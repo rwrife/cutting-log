@@ -1,4 +1,5 @@
 import 'package:cutting_log/src/application/media_workflow.dart';
+import 'package:cutting_log/src/application/portability_workflow.dart';
 import 'package:cutting_log/src/domain/journal_data_repository.dart';
 import 'package:cutting_log/src/domain/journal_overview.dart';
 import 'package:cutting_log/src/features/home/journal_home_page.dart';
@@ -11,6 +12,7 @@ final class CuttingLogApp extends StatelessWidget {
     this.dataRepository,
     this.notificationGateway = const DisabledLocalNotificationGateway(),
     this.mediaWorkflow,
+    this.portabilityWorkflow,
     super.key,
   });
 
@@ -18,6 +20,7 @@ final class CuttingLogApp extends StatelessWidget {
   final JournalDataRepository? dataRepository;
   final LocalNotificationGateway notificationGateway;
   final MediaWorkflow? mediaWorkflow;
+  final PortabilityWorkflow? portabilityWorkflow;
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +36,7 @@ final class CuttingLogApp extends StatelessWidget {
         dataRepository: dataRepository,
         notificationGateway: notificationGateway,
         mediaWorkflow: mediaWorkflow,
+        portabilityWorkflow: portabilityWorkflow,
       ),
     );
   }

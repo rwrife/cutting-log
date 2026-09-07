@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cutting_log/src/app.dart';
 import 'package:cutting_log/src/application/media_workflow.dart';
+import 'package:cutting_log/src/application/portability_workflow.dart';
 import 'package:cutting_log/src/application/reminder_workflow.dart';
 import 'package:cutting_log/src/data/app_private_media_store.dart';
 import 'package:cutting_log/src/data/drift_journal_repository.dart';
@@ -13,6 +14,7 @@ import 'package:cutting_log/src/platform/optional_permission_gateway.dart';
 import 'package:cutting_log/src/platform/permission_handler_optional_permission_gateway.dart';
 import 'package:cutting_log/src/platform/photo_import_gateway.dart';
 import 'package:flutter/widgets.dart';
+import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 Future<void> main() async {
@@ -32,21 +34,33 @@ Future<void> main() async {
   OptionalPermissionGateway permissions =
       const PermissionHandlerOptionalPermissionGateway();
   PhotoImportGateway photoImports = ImagePickerPhotoImportGateway();
+  Directory cacheRoot;
   Directory mediaRoot;
   try {
     // Ensure platform channels are available before enabling import actions.
     mediaRoot = await getApplicationSupportDirectory();
+    cacheRoot = await getTemporaryDirectory();
   } on Object {
     permissions = const DisabledOptionalPermissionGateway();
     photoImports = const DisabledPhotoImportGateway();
     mediaRoot = await Directory.systemTemp.createTemp('cutting-log-media-');
+    cacheRoot = await Directory.systemTemp.createTemp('cutting-log-cache-');
   }
 
+  final mediaStore = AppPrivateMediaStore(mediaRoot);
   final mediaWorkflow = MediaWorkflow(
     repository,
     permissions,
     photoImports,
-    AppPrivateMediaStore(mediaRoot),
+    mediaStore,
+  );
+  final portabilityWorkflow = PortabilityWorkflow(
+    database,
+    repository,
+    mediaStore,
+    notifications,
+    exportDirectory: Directory(path.join(mediaRoot.path, 'exports')),
+    cacheDirectory: cacheRoot,
   );
 
   runApp(
@@ -58,6 +72,7 @@ Future<void> main() async {
       dataRepository: repository,
       notificationGateway: notifications,
       mediaWorkflow: mediaWorkflow,
+      portabilityWorkflow: portabilityWorkflow,
     ),
   );
 }
