@@ -104,7 +104,7 @@ Cutting Log is a personal observation journal, not a botanical diagnostic, treat
 
 ## Status and milestones
 
-**Current status: local capture, review, check-in, owned-photo, and portability workflows.** The offline, account-free app stores parents, linked cuttings, observations, stage changes, outcomes, corrections, archives, reminders, and media metadata in its versioned app-private Drift/SQLite database. It adds accessible review filters, factual sibling summaries, a permission-safe local check-in due list, app-private photo import with generated thumbnails plus per-asset/all-media cleanup controls, and versioned CSV+ZIP export/restore with conflict preview and hash validation. Repository-owned tests and Android/iOS CI builds are present. Signed packages, physical-device evidence, screenshots, and store releases do not exist yet.
+**Current status: local capture, review, check-in, owned-photo, portability workflows, and release-candidate evidence automation.** The offline, account-free app stores parents, linked cuttings, observations, stage changes, outcomes, corrections, archives, reminders, and media metadata in its versioned app-private Drift/SQLite database. It adds accessible review filters, factual sibling summaries, a permission-safe local check-in due list, app-private photo import with generated thumbnails plus per-asset/all-media cleanup controls, versioned CSV+ZIP export/restore with conflict preview and hash validation, and scripts/docs for reproducible release-candidate verification with checksums. Signed store packages, physical-device evidence bundles, and store acceptance are still pending.
 
 1. Bootstrap Flutter packages and CI.
 2. Implement the event-based local domain and persistence layer.
@@ -124,14 +124,28 @@ Install the exact Flutter SDK version shown in `.flutter-version` (Flutter 3.47.
 ./tool/bootstrap.sh
 ./tool/check.sh
 ./tool/build_android.sh
+./tool/build_android_release.sh
+
+# Full release-candidate evidence bundle (logs + checksums):
+./tool/release_candidate.sh
 
 # On macOS with a supported Xcode installation:
 ./tool/build_ios.sh
 ```
 
-`tool/bootstrap.sh` rejects a mismatched Flutter version and requires the committed package lock before resolving packages. `tool/check.sh` enforces formatting, runs `flutter analyze`, and runs the unit/widget suite. The platform build scripts produce a debug APK and an unsigned iOS simulator app respectively.
+`tool/bootstrap.sh` rejects a mismatched Flutter version and requires the committed package lock before resolving packages. `tool/check.sh` enforces formatting, runs `flutter analyze`, and runs the unit/widget suite. `tool/build_android_release.sh` produces release and debug fallback Android artifacts using optional `android/key.properties` signing configuration. `tool/release_candidate.sh` runs the full reproducible release-candidate command set and writes logs/checksums under `artifacts/release-candidate/<UTC-stamp>/`.
 
 GitHub Actions runs those equivalent checks for every pull request and push to `main`. CI uploads short-lived Android debug and iOS simulator artifacts; they are development evidence, not signed release packages or physical-device results.
+
+## Release-candidate documentation
+
+- [Release candidate evidence checklist](docs/release-candidate-evidence.md)
+- [Changelog](docs/changelog.md)
+- [Privacy and permission disclosure](docs/privacy-permissions-disclosure.md)
+- [Migration and restore notes](docs/migration-restore-notes.md)
+- [Third-party software inventory](docs/third-party-licenses.md)
+- [Known limitations](docs/known-limitations.md)
+- [Screenshot evidence guidance](docs/screenshot-evidence.md)
 
 ## License
 

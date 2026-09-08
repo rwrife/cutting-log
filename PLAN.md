@@ -83,6 +83,7 @@ No optional AI is planned. Propagation outcomes are too context-dependent for an
 - Run clean Android and iOS builds from pinned environments.
 - Exercise fresh-install, upgrade/migration, denied-permission, backup round-trip, and offline acceptance checks.
 - Produce checksummed artifacts, release notes, privacy documentation, licenses, and truthful screenshots from built software.
+- Automate reproducible release-evidence bundles (commands, logs, checksums, package inventory) so every candidate can be audited from one script run.
 
 ## Testing strategy
 
