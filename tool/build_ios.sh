@@ -9,6 +9,6 @@ if [[ "$(uname -s)" != Darwin ]]; then
   exit 2
 fi
 
-"$ROOT/tool/bootstrap.sh"
+source "$ROOT/tool/bootstrap.sh"
 xcodebuild -version
 flutter build ios --simulator --debug --no-codesign
