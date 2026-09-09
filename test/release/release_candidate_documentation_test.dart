@@ -15,6 +15,9 @@ void main() {
       'docs/third-party-licenses.md',
       'docs/known-limitations.md',
       'docs/screenshot-evidence.md',
+      'docs/e2e-runbook.md',
+      'docs/device-evidence-log.md',
+      'integration_test/offline_journal_e2e_test.dart',
     ];
 
     for (final path in requiredPaths) {
