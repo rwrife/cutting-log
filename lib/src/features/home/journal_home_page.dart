@@ -756,6 +756,7 @@ final class _JournalHomePageState extends State<JournalHomePage> {
               )
             else ...<Widget>[
               FilledButton.icon(
+                key: const ValueKey<String>('export-backup'),
                 onPressed: _saving ? null : _exportLocalBackup,
                 icon: const Icon(Icons.download_outlined),
                 label: const Text('Create local backup (ZIP + CSV)'),
@@ -806,11 +807,13 @@ final class _JournalHomePageState extends State<JournalHomePage> {
                 runSpacing: 12,
                 children: <Widget>[
                   OutlinedButton.icon(
+                    key: const ValueKey<String>('preview-restore'),
                     onPressed: _saving ? null : _previewRestore,
                     icon: const Icon(Icons.preview_outlined),
                     label: const Text('Preview restore'),
                   ),
                   FilledButton.icon(
+                    key: const ValueKey<String>('apply-restore'),
                     onPressed: _saving || preview == null
                         ? null
                         : _applyRestore,

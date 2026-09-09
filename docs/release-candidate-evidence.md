@@ -31,7 +31,12 @@ With at least:
 
 ## Device and simulator matrix (manual evidence)
 
-Record exact names and OS versions in your run notes.
+Record exact names and OS versions as entries in
+[device-evidence-log.md](device-evidence-log.md) (template included; no runs
+recorded yet). The automated instrumentation journey
+`integration_test/offline_journal_e2e_test.dart` covers the workflow rows
+below on a named emulator/simulator once executed per
+[e2e-runbook.md](e2e-runbook.md); it does not replace the manual rows.
 
 | Surface | Required evidence |
 | --- | --- |
@@ -49,6 +54,8 @@ Record exact names and OS versions in your run notes.
 - [ ] `docs/known-limitations.md` updated.
 - [ ] `docs/export-schema-v1.json` hash published from `export-schema.sha256`.
 - [ ] README quickstart/status references only existing scripts/artifacts.
+- [ ] `docs/device-evidence-log.md` contains dated entries from actual emulator/simulator/device runs at the release commit.
+- [ ] CI artifacts at the release commit: Android debug APK + release AAB/APK (debug-signing fallback unless a keystore was configured) and the iOS simulator app. Release artifacts are evidence, not store acceptance.
 
 ## Policy reminders
 
