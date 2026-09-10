@@ -5,8 +5,16 @@ version, surface (emulator/simulator vs physical device), and what was
 observed. Add one entry per run; never backfill from assumptions. An
 emulator entry is not physical-device evidence.
 
-**Status: PENDING — no device, emulator, or simulator runs have been
-recorded for any release candidate yet.**
+**Status: PENDING — no manually verified device, emulator, or simulator runs
+have been recorded for any release candidate yet.**
+
+Note: CI executes the automated journey on every push/PR (API 34 x86_64
+emulator + named iPhone simulator) and uploads raw evidence
+(`journey-summary.json`, PNGs, permission dumps) as
+`cutting-log-android-e2e-evidence` / `cutting-log-ios-e2e-evidence` build
+artifacts. Those artifacts are not transcribed into this log until a
+maintainer reviews them against the commit SHA; until then this log remains
+honestly PENDING.
 
 ## Entry template
 

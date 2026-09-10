@@ -135,7 +135,7 @@ Install the exact Flutter SDK version shown in `.flutter-version` (Flutter 3.47.
 
 `tool/bootstrap.sh` rejects a mismatched Flutter version and requires the committed package lock before resolving packages. `tool/check.sh` enforces formatting, runs `flutter analyze`, and runs the unit/widget suite. `tool/build_android_release.sh` produces release and debug fallback Android artifacts using optional `android/key.properties` signing configuration. `tool/release_candidate.sh` runs the full reproducible release-candidate command set and writes logs/checksums under `artifacts/release-candidate/<UTC-stamp>/`.
 
-GitHub Actions runs those equivalent checks for every pull request and push to `main`. CI uploads short-lived Android debug and iOS simulator artifacts; they are development evidence, not signed release packages or physical-device results.
+GitHub Actions runs those equivalent checks for every pull request and push to `main`. CI also executes the full instrumented device journey on every push/PR — an API 34 x86_64 Android emulator (`android-e2e`) and a named iPhone simulator (`ios-e2e`) — and uploads the journey evidence (step summary JSON, on-device screenshots, permission dumps) as artifacts alongside the short-lived Android debug/release and iOS simulator builds. All CI artifacts are development evidence, not signed release packages or physical-device results.
 
 ## Release-candidate documentation
 

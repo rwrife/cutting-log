@@ -9,6 +9,7 @@ import 'package:cutting_log/src/data/drift_journal_repository.dart';
 import 'package:cutting_log/src/data/local_database.dart';
 import 'package:cutting_log/src/domain/journal_overview.dart';
 import 'package:cutting_log/src/platform/flutter_local_notification_gateway.dart';
+import 'package:cutting_log/src/platform/journey_configuration.dart';
 import 'package:cutting_log/src/platform/local_notification_gateway.dart';
 import 'package:cutting_log/src/platform/optional_permission_gateway.dart';
 import 'package:cutting_log/src/platform/permission_handler_optional_permission_gateway.dart';
@@ -34,6 +35,16 @@ Future<void> main() async {
   OptionalPermissionGateway permissions =
       const PermissionHandlerOptionalPermissionGateway();
   PhotoImportGateway photoImports = ImagePickerPhotoImportGateway();
+  if (JourneyConfiguration.isIntegrationTest) {
+    // Automated device journey: swap only the two capability entry points
+    // that would otherwise open native UI an instrumented test cannot
+    // answer. Persistence, media storage, and portability stay real.
+    if (notifications is! DisabledLocalNotificationGateway) {
+      notifications = JourneyDeferredNotificationGateway(notifications);
+    }
+    permissions = const JourneyAutoGrantPermissionGateway();
+    photoImports = const JourneySyntheticPhotoGateway();
+  }
   Directory cacheRoot;
   Directory mediaRoot;
   try {
