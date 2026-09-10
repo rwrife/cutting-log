@@ -146,7 +146,8 @@ jobs:
             adb shell dumpsys package com.rwrife.cutting_log | grep -A8 "requested permissions" > e2e-evidence/requested-permissions.txt || true
             (cd android && ./gradlew app:connectedDebugAndroidTest -Ptarget="$(pwd)/../integration_test/offline_journal_e2e_test.dart")
             JOURNEY_STATUS=$?
-            adb exec-out "run-as com.rwrife.cutting_log tar c app_flutter files" | tar x -C e2e-evidence || true
+            adb exec-out "run-as com.rwrife.cutting_log tar c app_flutter" | tar x -C e2e-evidence || true
+            adb exec-out "run-as com.rwrife.cutting_log tar c files" | tar x -C e2e-evidence || true
             adb exec-out screencap -p > e2e-evidence/final-screen.png || true
             adb shell getprop ro.build.version.release > e2e-evidence/android-version.txt || true
             exit $JOURNEY_STATUS
@@ -179,15 +180,15 @@ jobs:
           xcodebuild -version
           xcrun simctl list devices available --json > /tmp/sims.json
           python3 - /tmp/sims.json /tmp/sim.env <<'PY'
-          import json, sys
+          import json, shlex, sys
           data = json.load(open(sys.argv[1]))
           for runtime, devices in data['devices'].items():
               for d in devices:
                   if d.get('isAvailable') and d['name'].startswith('iPhone'):
                       with open(sys.argv[2], 'w') as env:
-                          env.write("SIM_UDID=%s\n" % d['udid'])
-                          env.write("SIM_NAME=%s\n" % d['name'])
-                          env.write("SIM_RUNTIME=%s\n" % runtime.split('.')[-1])
+                          env.write("SIM_UDID=%s\n" % shlex.quote(d['udid']))
+                          env.write("SIM_NAME=%s\n" % shlex.quote(d['name']))
+                          env.write("SIM_RUNTIME=%s\n" % shlex.quote(runtime.split('.')[-1]))
                       sys.exit(0)
           sys.exit('no available iPhone simulator on this host')
           PY

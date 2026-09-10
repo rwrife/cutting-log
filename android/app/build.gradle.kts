@@ -73,10 +73,12 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-    androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("androidx.test:rules:1.6.1")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
-    androidTestImplementation("junit:junit:4.13.2")
+    // androidx.test runner/rules/espresso/junit arrive transitively as
+    // `api` dependencies of the integration_test plugin. Explicit
+    // androidTestImplementation pins here conflicted with AGP's consistent
+    // resolution of the leaked runtime versions (androidx.test:runner was
+    // forced to strictly match the debug runtime classpath), breaking
+    // mergeDebugAndroidTestAssets. Let the plugin own the versions.
 }
 
 kotlin {
