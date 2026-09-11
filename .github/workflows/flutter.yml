@@ -140,7 +140,14 @@ jobs:
             yes | sdkmanager --licenses >/dev/null 2>&1 || true
             sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools" >/dev/null 2>&1 || true
             mkdir -p e2e-evidence
-            adb install -r build/app/outputs/flutter-apk/app-debug.apk
+            # Clear stale/leftover package state first: run 34551678478 died
+            # with UTP "Failed to install APK" + DELETE_FAILED_INTERNAL_ERROR
+            # while trying to uninstall a half-state install before the
+            # journey ever started (0 tests executed).
+            adb uninstall com.rwrife.cutting_log.test || true
+            adb uninstall com.rwrife.cutting_log || true
+            adb install -r build/app/outputs/flutter-apk/app-debug.apk \
+              || adb install -r build/app/outputs/flutter-apk/app-debug.apk
             adb shell pm grant com.rwrife.cutting_log android.permission.POST_NOTIFICATIONS || true
             adb shell pm grant com.rwrife.cutting_log android.permission.CAMERA || true
             adb shell dumpsys package com.rwrife.cutting_log | grep -A8 "requested permissions" > e2e-evidence/requested-permissions.txt || true
@@ -204,7 +211,24 @@ jobs:
           xcodebuild -version
       - run: flutter pub get --enforce-lockfile
       - name: Run full journal journey on simulator
-        run: flutter test integration_test/offline_journal_e2e_test.dart -d "${{ steps.simulator.outputs.udid }}"
+        # Hard 13-minute bound (outer) around the test's own 15-minute
+        # timeout, and tee the console into the evidence directory: on run
+        # 34433323596 the step produced zero output for 40 minutes after the
+        # Xcode build finished (blank screen at cancel), so a captured
+        # console tells us exactly where any future stall happened.
+        run: |
+          mkdir -p e2e-evidence
+          set -o pipefail
+          # macOS ships no GNU `timeout`; prefer gtimeout from coreutils.
+          TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
+          if [ -n "$TIMEOUT_BIN" ]; then
+            "$TIMEOUT_BIN" --preserve-status -k 30s 13m \
+              flutter test integration_test/offline_journal_e2e_test.dart -d "${{ steps.simulator.outputs.udid }}" \
+              2>&1 | tee e2e-evidence/journey-console.log
+          else
+            flutter test integration_test/offline_journal_e2e_test.dart -d "${{ steps.simulator.outputs.udid }}" \
+              2>&1 | tee e2e-evidence/journey-console.log
+          fi
       - name: Pull on-device journey evidence
         if: always()
         run: |
