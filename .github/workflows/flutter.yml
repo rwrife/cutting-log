@@ -146,8 +146,7 @@ jobs:
             # journey ever started (0 tests executed).
             adb uninstall com.rwrife.cutting_log.test || true
             adb uninstall com.rwrife.cutting_log || true
-            adb install -r build/app/outputs/flutter-apk/app-debug.apk \
-              || adb install -r build/app/outputs/flutter-apk/app-debug.apk
+            adb install -r build/app/outputs/flutter-apk/app-debug.apk || adb install -r build/app/outputs/flutter-apk/app-debug.apk
             adb shell pm grant com.rwrife.cutting_log android.permission.POST_NOTIFICATIONS || true
             adb shell pm grant com.rwrife.cutting_log android.permission.CAMERA || true
             adb shell dumpsys package com.rwrife.cutting_log | grep -A8 "requested permissions" > e2e-evidence/requested-permissions.txt || true
