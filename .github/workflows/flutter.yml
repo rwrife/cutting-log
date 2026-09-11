@@ -134,6 +134,11 @@ jobs:
           arch: x86_64
           profile: pixel_5
           disable-animations: true
+          # Hosted runners here run without KVM (ProbeKVM: no permission in
+          # every run log); boots take 9-14 min, and two attempts died at the
+          # action's 600s default boot timeout. Give booting room inside the
+          # 50-minute job budget.
+          emulator-boot-timeout: 1500
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
           script: |
             set +e

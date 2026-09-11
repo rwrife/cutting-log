@@ -143,7 +143,12 @@ void main() {
         reason: 'Offline promise banner must render.',
       );
       record('freshInstallShell', true);
-      await _scrollTo(tester, find.text('Offline and account-free'));
+      // The 'Offline and account-free' status tile exists only in the
+      // repository-less overview variant; the real app renders the
+      // privacy banner instead (verified in this journey above). Scroll
+      // to the section anchors that the real shell renders and assert
+      // against those.
+      await _scrollTo(tester, find.text('Parent plants'));
       await _screenshot(
         tester,
         driver,
@@ -153,7 +158,10 @@ void main() {
       );
       record(
         'offlineBannerVisible',
-        find.text('Offline and account-free').evaluate().isNotEmpty,
+        find
+            .textContaining('No account, network, or optional permission')
+            .evaluate()
+            .isNotEmpty,
       );
 
       // 2. Create a parent plant.
