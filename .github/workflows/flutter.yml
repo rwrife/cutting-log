@@ -220,12 +220,17 @@ jobs:
           set -o pipefail
           # macOS ships no GNU `timeout`; prefer gtimeout from coreutils.
           TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
+          # --disable-service-auth-codes: three consecutive runs stalled
+          # permanently between 'Xcode build done' and the first test line.
+          # That is the known flutter-test VM-service attach hang against
+          # simulator discovery (auth-code exchange), not app code — the
+          # journey-console.log ends exactly at the build line every time.
           if [ -n "$TIMEOUT_BIN" ]; then
             "$TIMEOUT_BIN" --preserve-status -k 30s 13m \
-              flutter test integration_test/offline_journal_e2e_test.dart -d "${{ steps.simulator.outputs.udid }}" \
+              flutter test integration_test/offline_journal_e2e_test.dart --disable-service-auth-codes -d "${{ steps.simulator.outputs.udid }}" \
               2>&1 | tee e2e-evidence/journey-console.log
           else
-            flutter test integration_test/offline_journal_e2e_test.dart -d "${{ steps.simulator.outputs.udid }}" \
+            flutter test integration_test/offline_journal_e2e_test.dart --disable-service-auth-codes -d "${{ steps.simulator.outputs.udid }}" \
               2>&1 | tee e2e-evidence/journey-console.log
           fi
       - name: Pull on-device journey evidence
