@@ -25,8 +25,15 @@ Future<void> main() async {
 
   LocalNotificationGateway notifications = FlutterLocalNotificationGateway();
   try {
-    await notifications.initialize();
-    await ReminderWorkflow(repository, notifications).reconcile();
+    // Bounded, not just error-guarded: plugin init or reconciliation that
+    // never answers (observed on a CI iOS simulator, which hung startup for
+    // 40 minutes with a blank screen) must also fall back to the disabled
+    // gateway instead of blocking the journal forever.
+    await notifications.initialize().timeout(const Duration(seconds: 15));
+    await ReminderWorkflow(
+      repository,
+      notifications,
+    ).reconcile().timeout(const Duration(seconds: 15));
   } on Object {
     // Optional notification setup must never prevent access to the journal.
     notifications = const DisabledLocalNotificationGateway();
