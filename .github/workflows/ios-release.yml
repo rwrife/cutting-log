@@ -46,6 +46,18 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
+      - name: Select Xcode
+        run: |
+          echo "Xcode versions on this image:"
+          ls -d /Applications/Xcode*.app
+          latest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
+          [ -n "$latest" ] || latest=/Applications/Xcode.app
+          sudo xcode-select --switch "$latest/Contents/Developer"
+          major="$(xcodebuild -version | head -1 | cut -d' ' -f2 | cut -d. -f1)"
+          if [ "$major" -lt 26 ]; then
+            echo "::error::App Store Connect rejects builds made with anything older than the iOS 26 SDK, and the newest Xcode on this runner is $major. Move the job to a newer runner image."
+            exit 1
+          fi
       - name: Toolchain versions
         run: |
           echo "lane: $LANE"
