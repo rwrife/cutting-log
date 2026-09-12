@@ -388,7 +388,11 @@ void main() {
       // restore resets selection and re-renders asynchronously; wait on
       // real time for the parent card, then scroll it into view.
       final restoredParent = find.text('E2E pothos');
-      final parentBack = await _waitFor(tester, restoredParent, maxSeconds: 30);
+      final parentBack = await _waitForVisible(
+        tester,
+        restoredParent,
+        maxSeconds: 30,
+      );
       expect(parentBack, isTrue, reason: 'Restored parent must be listed.');
       await _scrollTo(tester, restoredParent);
       expect(find.text('E2E pothos'), findsOneWidget);
