@@ -135,10 +135,13 @@ def project_root
   end
 end
 
-# ASC_KEY_P8 holds the base64 of the App Store Connect .p8 file. Normalise it here
-# and hand a clean base64 PEM back to `app_store_connect_api_key`, so an encoding
-# problem surfaces as a readable message instead of "string contains null byte"
-# from deep inside OpenSSL. No key material is ever logged.
+# ASC_KEY_P8 may hold either the .p8 file's contents verbatim or its base64; both
+# are easy to produce by hand, and telling them apart here is cheaper than getting
+# it wrong. Passing a verbatim PEM to `app_store_connect_api_key` with
+# is_key_content_base64 set makes Base64.decode64 fold the "-----BEGIN PRIVATE
+# KEY-----" header into the body (those characters are all in the base64 alphabet),
+# yielding binary that fails deep inside OpenSSL as "string contains null byte".
+# Whatever comes in, a clean base64 PEM goes out. No key material is ever logged.
 def app_store_api_key_base64
   Base64.strict_encode64(app_store_api_key_pem)
 end
@@ -221,13 +224,14 @@ def app_store_api_key_pem
       pem.delete("\x00")
     end
   end
-  pem = pem.dup.force_encoding(Encoding::UTF_8).delete("﻿").delete("\r").strip
+  pem = pem.dup.force_encoding(Encoding::UTF_8).delete("\uFEFF").delete("\r").strip
 
   unless pem.start_with?("-----BEGIN") && pem.include?("PRIVATE KEY")
     UI.user_error!(
-      "ASC_KEY_P8 did not decode to a PEM private key (#{pem.bytesize} bytes). " \
-      "Re-create the secret from the raw bytes of the .p8 file: " \
-      "[Convert]::ToBase64String([IO.File]::ReadAllBytes('AuthKey_XXXXXXXXXX.p8'))"
+      "ASC_KEY_P8 is not a PEM private key (#{pem.bytesize} bytes after decoding). " \
+      "Set it to either the .p8 file's contents verbatim, or its base64 built from " \
+      "the raw file bytes -- on Windows, " \
+      "[Convert]::ToBase64String([IO.File]::ReadAllBytes('AuthKey_XXXXXXXXXX.p8'))."
     )
   end
 
