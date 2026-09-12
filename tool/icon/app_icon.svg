@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E8F5E9" />
+      <stop offset="100%" stop-color="#A5D6A7" />
+    </linearGradient>
+    
+    <!-- Soft Drop Shadow for Depth -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="24" stdDeviation="24" flood-color="#004D40" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Background (Square, edge-to-edge for Xcode) -->
+  <rect width="1024" height="1024" fill="url(#bg)" />
+
+  <g filter="url(#shadow)">
+    <!-- Glass Vase Base Container -->
+    <rect x="362" y="450" width="300" height="400" rx="60" fill="#ffffff" fill-opacity="0.65" />
+    
+    <!-- Water Level -->
+    <path d="M 362 600 L 662 600 L 662 790 C 662 823.1 635.1 850 602 850 L 422 850 C 388.9 850 362 823.1 362 790 Z" fill="#81D4FA" fill-opacity="0.85" />
+    
+    <!-- Roots (Growing from the bottom of the stem) -->
+    <path d="M 512 650 Q 470 730 512 810" stroke="#FFF9C4" stroke-width="16" stroke-linecap="round" fill="none" />
+    <path d="M 512 620 Q 430 680 440 770" stroke="#FFF9C4" stroke-width="12" stroke-linecap="round" fill="none" />
+    <path d="M 512 630 Q 590 700 570 790" stroke="#FFF9C4" stroke-width="12" stroke-linecap="round" fill="none" />
+
+    <!-- Stem -->
+    <path d="M 512 250 L 512 680" stroke="#2E7D32" stroke-width="32" stroke-linecap="round" fill="none" />
+    
+    <!-- Left Leaf -->
+    <path d="M 512 450 C 320 480, 250 300, 320 200 C 380 120, 512 250, 512 450 Z" fill="#4CAF50" />
+    <path d="M 512 450 C 400 450, 340 320, 320 200 C 380 120, 480 250, 512 450 Z" fill="#388E3C" /> 
+
+    <!-- Right Leaf -->
+    <path d="M 512 350 C 700 350, 780 180, 680 100 C 600 20, 512 180, 512 350 Z" fill="#4CAF50" />
+    <path d="M 512 350 C 600 350, 680 220, 680 100 C 600 20, 540 180, 512 350 Z" fill="#388E3C" /> 
+    
+    <!-- Top Leaf -->
+    <path d="M 512 250 C 420 150, 512 20, 620 50 C 700 80, 580 200, 512 250 Z" fill="#81C784" />
+    <path d="M 512 250 C 512 150, 580 70, 620 50 C 700 80, 580 200, 512 250 Z" fill="#66BB6A" />
+
+    <!-- Glass Highlights (Adds a curved reflection effect to the glass) -->
+    <path d="M 392 480 L 392 780" stroke="#ffffff" stroke-width="18" stroke-linecap="round" stroke-opacity="0.9" fill="none" />
+    <path d="M 432 480 L 432 550" stroke="#ffffff" stroke-width="18" stroke-linecap="round" stroke-opacity="0.9" fill="none" />
+  </g>
+</svg>
