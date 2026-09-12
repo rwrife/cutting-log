@@ -1,0 +1,126 @@
+# Fastfile for Cutting Log.
+#
+# Lives at the repository root (not under ios/) because both lanes shell out to
+# `flutter build ipa`, which must run from the Flutter project root.
+
+default_platform(:ios)
+
+APP_IDENTIFIER = "com.infinityball.cuttinglog".freeze
+
+platform :ios do
+  desc "Build a signed release IPA and upload it to TestFlight."
+  lane :beta do
+    build = build_release_ipa
+
+    upload_to_testflight(
+      api_key: build[:api_key],
+      app_identifier: APP_IDENTIFIER,
+      ipa: build[:ipa],
+      skip_waiting_for_build_processing: true
+    )
+
+    UI.success("Uploaded #{build[:build_name]} (#{build[:build_number]}) to TestFlight.")
+  end
+
+  desc "Build a signed release IPA, upload it, and submit it for App Store review."
+  lane :release do
+    build = build_release_ipa
+
+    upload_to_app_store(
+      api_key: build[:api_key],
+      app_identifier: APP_IDENTIFIER,
+      ipa: build[:ipa],
+      app_version: build[:build_name],
+      submit_for_review: true,
+      automatic_release: true,
+      force: true,
+      skip_metadata: true,
+      skip_screenshots: true,
+      run_precheck_before_submit: false,
+      submission_information: {
+        add_id_info_uses_idfa: false,
+        export_compliance_uses_encryption: false
+      }
+    )
+
+    UI.success("Submitted #{build[:build_name]} (#{build[:build_number]}) for App Store review.")
+  end
+
+  # Shared build step for both lanes.
+  #
+  # The build number is read from App Store Connect and passed to Flutter on the
+  # command line rather than written into the Xcode project. Info.plist takes
+  # CFBundleShortVersionString/CFBundleVersion from $(FLUTTER_BUILD_NAME) and
+  # $(FLUTTER_BUILD_NUMBER), which `flutter build` regenerates on every build, so
+  # `increment_build_number` would be overwritten and silently ineffective.
+  private_lane :build_release_ipa do
+    api_key = app_store_connect_api_key(
+      key_id: required_env("ASC_KEY_ID"),
+      issuer_id: required_env("ASC_ISSUER_ID"),
+      key_content: required_env("ASC_KEY_P8"),
+      is_key_content_base64: true,
+      in_house: false
+    )
+
+    setup_ci
+
+    build_number = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: APP_IDENTIFIER,
+      initial_build_number: 0
+    ).to_i + 1
+
+    build_name = flutter_build_name
+
+    UI.message("Building #{APP_IDENTIFIER} #{build_name} (#{build_number}) from #{project_root}")
+
+    # `sh` runs from the fastlane/ directory, so each command is anchored to the
+    # project root explicitly.
+    sh("cd \"#{project_root}\" && flutter pub get --enforce-lockfile")
+    sh("cd \"#{project_root}\" && flutter build ipa --release " \
+       "--build-name=#{build_name} --build-number=#{build_number}")
+
+    {
+      api_key: api_key,
+      ipa: locate_ipa,
+      build_name: build_name,
+      build_number: build_number
+    }
+  end
+end
+
+# --- helpers ----------------------------------------------------------------
+
+# Absolute path to the Flutter project root (the parent of this fastlane/ folder).
+def project_root
+  @project_root ||= begin
+    folder = FastlaneCore::FastlaneFolder.path
+    root = folder ? File.expand_path("..", folder) : Dir.pwd
+    unless File.exist?(File.join(root, "pubspec.yaml"))
+      UI.user_error!("No pubspec.yaml in #{root}; fastlane/ must sit at the Flutter project root.")
+    end
+    root
+  end
+end
+
+def required_env(name)
+  value = ENV[name]
+  UI.user_error!("Missing required environment variable #{name}.") if value.nil? || value.strip.empty?
+  value
+end
+
+# `version: 0.1.0+1` in pubspec.yaml -> "0.1.0". The build number after `+` is
+# ignored; App Store Connect is the source of truth for it.
+def flutter_build_name
+  pubspec = File.read(File.join(project_root, "pubspec.yaml"))
+  name = pubspec[/^version:\s*([^\s+]+)/, 1]
+  UI.user_error!("Could not read `version:` from pubspec.yaml.") if name.nil?
+  name
+end
+
+# Flutter names the IPA after the Xcode scheme/product, so glob rather than guess.
+def locate_ipa
+  candidates = Dir.glob(File.join(project_root, "build", "ios", "ipa", "*.ipa"))
+  UI.user_error!("No .ipa found in build/ios/ipa.") if candidates.empty?
+  candidates.max_by { |path| File.mtime(path) }
+end

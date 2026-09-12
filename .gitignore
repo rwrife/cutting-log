@@ -56,3 +56,9 @@ test-results/
 !.env.example
 *.p12
 *.mobileprovision
+*.p8
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output/
