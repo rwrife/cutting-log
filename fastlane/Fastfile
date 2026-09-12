@@ -3,6 +3,8 @@
 # Lives at the repository root (not under ios/) because both lanes shell out to
 # `flutter build ipa`, which must run from the Flutter project root.
 
+require "base64"
+
 default_platform(:ios)
 
 APP_IDENTIFIER = "com.infinityball.cuttinglog".freeze
@@ -57,7 +59,7 @@ platform :ios do
     api_key = app_store_connect_api_key(
       key_id: required_env("ASC_KEY_ID"),
       issuer_id: required_env("ASC_ISSUER_ID"),
-      key_content: required_env("ASC_KEY_P8"),
+      key_content: app_store_api_key_base64,
       is_key_content_base64: true,
       in_house: false
     )
@@ -101,6 +103,39 @@ def project_root
     end
     root
   end
+end
+
+# ASC_KEY_P8 holds the base64 of the App Store Connect .p8 file. Normalise it here
+# and hand a clean base64 PEM back to `app_store_connect_api_key`, so an encoding
+# problem surfaces as a readable message instead of "string contains null byte"
+# from deep inside OpenSSL. No key material is ever logged.
+def app_store_api_key_base64
+  raw = required_env("ASC_KEY_P8").strip
+  pem = raw.start_with?("-----BEGIN") ? raw : Base64.decode64(raw)
+
+  # A .p8 captured through PowerShell's default UTF-16 output decodes to text with
+  # a NUL between every character. Recover it rather than failing on a text-encoding
+  # quirk that has nothing to do with the key itself.
+  if pem.include?("\x00")
+    UI.important("ASC_KEY_P8 decoded to UTF-16 text; converting to UTF-8.")
+    pem = begin
+      pem.dup.force_encoding(Encoding::UTF_16LE).encode(Encoding::UTF_8)
+    rescue EncodingError
+      pem.delete("\x00")
+    end
+  end
+  pem = pem.dup.force_encoding(Encoding::UTF_8).delete("﻿").delete("\r").strip
+
+  unless pem.start_with?("-----BEGIN") && pem.include?("PRIVATE KEY")
+    UI.user_error!(
+      "ASC_KEY_P8 did not decode to a PEM private key (#{pem.bytesize} bytes). " \
+      "Re-create the secret from the raw bytes of the .p8 file: " \
+      "[Convert]::ToBase64String([IO.File]::ReadAllBytes('AuthKey_XXXXXXXXXX.p8'))"
+    )
+  end
+
+  UI.message("ASC_KEY_P8 -> #{pem.bytesize} bytes, #{pem.lines.first.strip}")
+  Base64.strict_encode64(pem)
 end
 
 def required_env(name)
