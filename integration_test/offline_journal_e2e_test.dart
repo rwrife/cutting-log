@@ -167,8 +167,15 @@ void main() {
       // 2. Create a parent plant.
       await _enterText(tester, 'Parent plant nickname', 'E2E pothos');
       await _tapVisible(tester, find.byKey(const ValueKey('create-parent')));
-      await tester.pumpAndSettle();
-      expect(find.text('Cuttings for E2E pothos'), findsOneWidget);
+      expect(
+        await _waitFor(
+          tester,
+          find.text('Cuttings for E2E pothos'),
+          maxSeconds: 30,
+        ),
+        isTrue,
+        reason: 'Parent selection must render after creating the parent.',
+      );
       record('createParent', true);
 
       // 3. Start a cutting with a first observation.
@@ -176,14 +183,20 @@ void main() {
       await _enterText(tester, 'Method', 'Stem');
       await _enterText(tester, 'Medium (optional)', 'Water');
       await _tapVisible(tester, find.byKey(const ValueKey('start-cutting')));
-      await tester.pumpAndSettle();
-      // The timeline section renders only once the async reload after
-      // 'Start cutting' resolves _cutting; pumpAndSettle alone returned
-      // before that completed on the first iOS simulator run ('Found 0
-      // widgets'). scrollUntilVisible pumps until the header exists and
-      // brings it into view, then the assertion is precise.
-      await _scrollTo(tester, find.text('E2E node A timeline'));
-      expect(find.text('E2E node A timeline'), findsOneWidget);
+      // The timeline section and its event cards render only once the
+      // async reload after each state-changing tap resolves; pumpAndSettle
+      // alone returned first on both device runs (iOS failed at the
+      // timeline header, Android at the observation card). Wait on the
+      // rendered widget itself.
+      expect(
+        await _waitFor(
+          tester,
+          find.text('E2E node A timeline'),
+          maxSeconds: 30,
+        ),
+        isTrue,
+        reason: 'Timeline header must render after starting the cutting.',
+      );
 
       await _enterText(
         tester,
@@ -191,8 +204,15 @@ void main() {
         'E2E: node placed in water at the north window.',
       );
       await _tapVisible(tester, find.byKey(const ValueKey('add-observation')));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('E2E: node placed in water'), findsOneWidget);
+      expect(
+        await _waitFor(
+          tester,
+          find.textContaining('E2E: node placed in water'),
+          maxSeconds: 30,
+        ),
+        isTrue,
+        reason: 'Observation must appear in the timeline after the reload.',
+      );
       record('cuttingTimelineObservation', true);
       await _screenshot(
         tester,
@@ -364,9 +384,12 @@ void main() {
       record('restoreApplied', true);
 
       // 9. The restored journal shows the original lineage again. Apply
-      // restore resets selection and re-renders asynchronously; wait by
-      // scrolling until the restored parent card is actually rendered.
-      await _scrollTo(tester, find.text('E2E pothos'));
+      // restore resets selection and re-renders asynchronously; wait on
+      // real time for the parent card, then scroll it into view.
+      final restoredParent = find.text('E2E pothos');
+      final parentBack = await _waitFor(tester, restoredParent, maxSeconds: 30);
+      expect(parentBack, isTrue, reason: 'Restored parent must be listed.');
+      await _scrollTo(tester, restoredParent);
       expect(find.text('E2E pothos'), findsOneWidget);
       record('restoredLineageVisible', true);
       await _screenshot(
