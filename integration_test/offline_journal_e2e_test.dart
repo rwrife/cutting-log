@@ -420,10 +420,20 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
   // current viewport can never come back into view — and the async reloads
   // plus scroll sweeps in earlier steps routinely leave the next target
   // mounted above (or unmounted outside cacheExtent). Wait until the
-  // finder is mounted (the sweep searches both directions), then let the
+  // finder is mounted (the scan searches the full extent), then let the
   // scrollable itself place it on screen via ensureVisible.
-  final mounted = await _waitForVisible(tester, finder, maxSeconds: 25);
-  expect(mounted, isTrue, reason: 'Could not bring $finder into the tree.');
+  final diagnostics = <String>[];
+  final mounted = await _waitForVisible(
+    tester,
+    finder,
+    maxSeconds: 25,
+    diagnostics: diagnostics,
+  );
+  expect(
+    mounted,
+    isTrue,
+    reason: 'Could not bring $finder into the tree. ${diagnostics.join('; ')}',
+  );
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
 }
@@ -462,45 +472,68 @@ Future<bool> _waitFor(
 /// `find.text` only sees mounted elements. Plain `pumpAndSettle`/timed
 /// waits returned false on both device platforms for content below the
 /// fold (iOS at the timeline header, Android at the observation card).
-/// Each attempt therefore sweeps the main list's scroll position across its
-/// full extent in bounded `jumpTo` steps (no gestures, so the pull-to-
-/// refresh never fires), pumping a frame per step so newly scrolled-in
-/// children mount, while real time lets the pending reload finish.
+///
+/// Each pass is a deterministic full-coverage scan: jump to the top, then
+/// walk down in fixed steps, pumping a settled frame per step so every
+/// child mounts exactly once as it scrolls in (gesture-free, so the
+/// pull-to-refresh never fires). Between passes, real time lets pending
+/// async reloads finish. On timeout the returned diagnostics list carries
+/// a full inventory of mounted text plus scroll geometry, which failure
+/// messages embed so CI logs say exactly where the tree was.
 Future<bool> _waitForVisible(
   WidgetTester tester,
   Finder finder, {
   required int maxSeconds,
+  List<String>? diagnostics,
 }) async {
   final deadline = DateTime.now().add(Duration(seconds: maxSeconds));
-  final scrollable = find.byType(Scrollable).first;
+  final scrollables = find.byType(Scrollable);
   while (DateTime.now().isBefore(deadline)) {
     if (finder.evaluate().isNotEmpty) return true;
-    if (scrollable.evaluate().isNotEmpty) {
-      final position = tester.state<ScrollableState>(scrollable).position;
-      // Sweep toward the end until maxScrollExtent stops growing.
-      var stalled = 0;
-      while (stalled < 3 && DateTime.now().isBefore(deadline)) {
-        final before = position.pixels;
-        position.jumpTo(before + 400);
-        await tester.pump();
+    if (scrollables.evaluate().isNotEmpty) {
+      // Main journal list = the scrollable with the longest extent;
+      // TextField editables have tiny extents, the page list dwarfs them.
+      final positions = <ScrollPosition>[
+        for (final element in scrollables.evaluate())
+          ((element as StatefulElement).state as ScrollableState).position,
+      ];
+      final main = positions.reduce(
+        (a, b) => a.maxScrollExtent >= b.maxScrollExtent ? a : b,
+      );
+      main.jumpTo(0);
+      await tester.pumpAndSettle(const Duration(milliseconds: 10));
+      if (finder.evaluate().isNotEmpty) return true;
+      var guard = 0;
+      var lastPixel = -1.0;
+      while (guard++ < 80 && DateTime.now().isBefore(deadline)) {
+        main.jumpTo(main.pixels + 500);
+        await tester.pumpAndSettle(const Duration(milliseconds: 10));
         if (finder.evaluate().isNotEmpty) return true;
-        await tester.pump(const Duration(milliseconds: 20));
-        stalled = position.pixels == before ? stalled + 1 : 0;
-      }
-      // Sweep back toward the top for content above the current viewport.
-      while (position.pixels > 0 && DateTime.now().isBefore(deadline)) {
-        final before = position.pixels;
-        position.jumpTo((position.pixels - 400).clamp(0.0, double.infinity));
-        await tester.pump();
-        if (finder.evaluate().isNotEmpty) return true;
-        await tester.pump(const Duration(milliseconds: 20));
-        if (position.pixels == before) break;
+        if (main.pixels == lastPixel) break; // at the end of the list
+        lastPixel = main.pixels;
       }
     }
-    await Future<void>.delayed(const Duration(milliseconds: 100));
-    await tester.pump(const Duration(milliseconds: 100));
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    await tester.pump(const Duration(milliseconds: 150));
   }
-  return finder.evaluate().isNotEmpty;
+  final found = finder.evaluate().isNotEmpty;
+  if (!found && diagnostics != null) {
+    diagnostics.add('scrollables=${scrollables.evaluate().length}');
+    for (final element in scrollables.evaluate()) {
+      final state = (element as StatefulElement).state as ScrollableState;
+      diagnostics.add(
+        'scroll px=${state.position.pixels.toStringAsFixed(0)} '
+        'max=${state.position.maxScrollExtent.toStringAsFixed(0)}',
+      );
+    }
+    final texts = find
+        .byType(Text)
+        .evaluate()
+        .map((e) => (e.widget as Text).data ?? '')
+        .where((t) => t.isNotEmpty);
+    diagnostics.add('mountedTexts=[${texts.join(' | ')}]');
+  }
+  return found;
 }
 
 /// Captures a screenshot into the on-device evidence directory when the

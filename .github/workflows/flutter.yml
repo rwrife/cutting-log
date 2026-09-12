@@ -178,6 +178,10 @@ jobs:
             adb exec-out "run-as com.rwrife.cutting_log tar c files" | tar x -C e2e-evidence || true
             adb exec-out screencap -p > e2e-evidence/final-screen.png || true
             adb shell getprop ro.build.version.release > e2e-evidence/android-version.txt || true
+            # Device-side JOURNEY step prints and any Flutter exception are
+            # only on logcat — the gradle console truncates them. Capture the
+            # buffer so every run leaves step-level evidence.
+            adb logcat -d -t 4000 > e2e-evidence/logcat.txt || true
             exit $JOURNEY_STATUS
       - name: Archive journey evidence
         if: always()
