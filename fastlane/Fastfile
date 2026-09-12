@@ -1,7 +1,7 @@
 # Fastfile for Cutting Log.
 #
 # Lives at the repository root (not under ios/) because both lanes shell out to
-# `flutter build ipa`, which must run from the Flutter project root.
+# `flutter build`, which must run from the Flutter project root.
 
 require "base64"
 require "fileutils"
@@ -10,6 +10,8 @@ require "tmpdir"
 default_platform(:ios)
 
 APP_IDENTIFIER = "com.infinityball.cuttinglog".freeze
+# Must match DEVELOPMENT_TEAM in ios/Runner.xcodeproj/project.pbxproj.
+DEVELOPMENT_TEAM = "2ES87W257J".freeze
 
 platform :ios do
   desc "Build a signed release IPA and upload it to TestFlight."
@@ -82,30 +84,32 @@ platform :ios do
     # project root explicitly.
     sh("cd \"#{project_root}\" && flutter pub get --enforce-lockfile")
 
+    # `flutter build ipa` archives and exports in one step, and forwards neither
+    # -allowProvisioningUpdates nor -authenticationKey* to xcodebuild. Without an
+    # Apple account on the runner that fails twice over: the archive cannot fetch a
+    # development profile ("No Accounts"), and the export cannot fetch the
+    # distribution certificate ("No signing certificate \"iOS Distribution\" found").
+    # Flutter still produces the app and Generated.xcconfig, but the two signing
+    # steps are driven directly so the API key reaches them and Xcode can provision
+    # against App Store Connect.
     with_xcode_signing_credentials do
-      # `flutter build ipa` does not forward -authenticationKey* to xcodebuild, so
-      # automatic signing has no account and fails with "No Accounts" / "No profiles
-      # for com.infinityball.cuttinglog were found". Generate the Flutter artefacts
-      # without signing, then archive once through xcodebuild *with* the API key so
-      # Xcode provisions the app and caches the profiles, and only then hand over to
-      # `flutter build ipa`, which now finds everything it needs.
       sh("cd \"#{project_root}\" && flutter build ios --release --no-codesign " \
          "--build-name=#{build_name} --build-number=#{build_number}")
 
-      sh(
-        "cd \"#{project_root}\" && xcodebuild " \
-        "-workspace ios/Runner.xcworkspace -scheme Runner -configuration Release " \
-        "-destination generic/platform=iOS " \
-        "-archivePath \"#{signing_workdir}/Runner.xcarchive\" " \
-        "-allowProvisioningUpdates " \
-        "-authenticationKeyPath \"#{api_key_file}\" " \
-        '-authenticationKeyID "$ASC_KEY_ID" ' \
-        '-authenticationKeyIssuerID "$ASC_ISSUER_ID" ' \
-        "archive"
-      )
+      archive = File.join(signing_workdir, "Runner.xcarchive")
+      sh("cd \"#{project_root}\" && xcodebuild " \
+         "-workspace ios/Runner.xcworkspace -scheme Runner -configuration Release " \
+         "-destination generic/platform=iOS " \
+         "-archivePath \"#{archive}\" " \
+         "#{xcodebuild_auth_flags} archive")
 
-      sh("cd \"#{project_root}\" && flutter build ipa --release " \
-         "--build-name=#{build_name} --build-number=#{build_number}")
+      FileUtils.rm_rf(ipa_output_dir)
+      FileUtils.mkdir_p(ipa_output_dir)
+      sh("cd \"#{project_root}\" && xcodebuild -exportArchive " \
+         "-archivePath \"#{archive}\" " \
+         "-exportPath \"#{ipa_output_dir}\" " \
+         "-exportOptionsPlist \"#{write_export_options}\" " \
+         "#{xcodebuild_auth_flags}")
     end
 
     {
@@ -152,6 +156,44 @@ ensure
   FileUtils.rm_rf(@signing_workdir) if @signing_workdir
   @signing_workdir = nil
   @api_key_file = nil
+end
+
+# Credentials for xcodebuild's automatic (cloud) signing. The key id and issuer id
+# are passed as shell references so their values never appear in the logged command.
+def xcodebuild_auth_flags
+  "-allowProvisioningUpdates " \
+    "-authenticationKeyPath \"#{api_key_file}\" " \
+    '-authenticationKeyID "$ASC_KEY_ID" ' \
+    '-authenticationKeyIssuerID "$ASC_ISSUER_ID"'
+end
+
+# Where `flutter build ipa` would have put the IPA, so the rest of the lane and the
+# workflow's artifact upload are unaffected by driving the export ourselves.
+def ipa_output_dir
+  File.join(project_root, "build", "ios", "ipa")
+end
+
+def write_export_options
+  path = File.join(signing_workdir, "ExportOptions.plist")
+  File.write(path, <<~PLIST)
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+    \t<key>destination</key>
+    \t<string>export</string>
+    \t<key>method</key>
+    \t<string>app-store-connect</string>
+    \t<key>signingStyle</key>
+    \t<string>automatic</string>
+    \t<key>teamID</key>
+    \t<string>#{DEVELOPMENT_TEAM}</string>
+    \t<key>uploadSymbols</key>
+    \t<true/>
+    </dict>
+    </plist>
+  PLIST
+  path
 end
 
 def signing_workdir
