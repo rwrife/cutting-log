@@ -142,7 +142,15 @@ void main() {
         isTrue,
         reason: 'Offline promise banner must render.',
       );
+      // Capture the full banner text while it is still mounted — the
+      // scroll below unmounts list content and made this record false
+      // even when the banner assertion above passed.
+      final fullBannerVisible = find
+          .textContaining('No account, network, or optional permission')
+          .evaluate()
+          .isNotEmpty;
       record('freshInstallShell', true);
+      record('offlineBannerVisible', fullBannerVisible);
       // The 'Offline and account-free' status tile exists only in the
       // repository-less overview variant; the real app renders the
       // privacy banner instead (verified in this journey above). Scroll
@@ -156,19 +164,12 @@ void main() {
         '01-fresh-install',
         enabled: !Platform.isAndroid || surfaceConverted,
       );
-      record(
-        'offlineBannerVisible',
-        find
-            .textContaining('No account, network, or optional permission')
-            .evaluate()
-            .isNotEmpty,
-      );
 
       // 2. Create a parent plant.
       await _enterText(tester, 'Parent plant nickname', 'E2E pothos');
       await _tapVisible(tester, find.byKey(const ValueKey('create-parent')));
       expect(
-        await _waitFor(
+        await _waitForVisible(
           tester,
           find.text('Cuttings for E2E pothos'),
           maxSeconds: 30,
@@ -183,13 +184,13 @@ void main() {
       await _enterText(tester, 'Method', 'Stem');
       await _enterText(tester, 'Medium (optional)', 'Water');
       await _tapVisible(tester, find.byKey(const ValueKey('start-cutting')));
-      // The timeline section and its event cards render only once the
-      // async reload after each state-changing tap resolves; pumpAndSettle
-      // alone returned first on both device runs (iOS failed at the
-      // timeline header, Android at the observation card). Wait on the
-      // rendered widget itself.
+      // List content below the fold only exists once the async reload has
+      // completed AND the ListView has laid it out near the viewport;
+      // time-only waits and pumpAndSettle both returned 'Found 0 widgets'
+      // on the device runs (iOS at the timeline header, Android at the
+      // observation card). Wait with scrolling.
       expect(
-        await _waitFor(
+        await _waitForVisible(
           tester,
           find.text('E2E node A timeline'),
           maxSeconds: 30,
@@ -205,7 +206,7 @@ void main() {
       );
       await _tapVisible(tester, find.byKey(const ValueKey('add-observation')));
       expect(
-        await _waitFor(
+        await _waitForVisible(
           tester,
           find.textContaining('E2E: node placed in water'),
           maxSeconds: 30,
@@ -251,7 +252,7 @@ void main() {
       );
       expect(attached, isTrue, reason: 'Journey-mode attach must complete.');
       record('photoAttached', true);
-      final photoVisible = await _waitFor(
+      final photoVisible = await _waitForVisible(
         tester,
         find.textContaining('E2E caption'),
         maxSeconds: 20,
@@ -280,7 +281,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Save'), findsOneWidget);
       await tester.tap(find.text('Save'));
-      final reminderRowVisible = await _waitFor(
+      final reminderRowVisible = await _waitForVisible(
         tester,
         find.textContaining('Upcoming check-in'),
         maxSeconds: 20,
@@ -307,7 +308,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('export-backup')));
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
-      final exportVisible = await _waitFor(
+      final exportVisible = await _waitForVisible(
         tester,
         find.textContaining('Latest export: '),
         maxSeconds: 40,
@@ -333,7 +334,7 @@ void main() {
       await tester.tap(find.text('Delete local library'));
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
-      final erased = await _waitFor(
+      final erased = await _waitForVisible(
         tester,
         find.text('No active parent plants yet. Create one below.'),
         maxSeconds: 20,
@@ -353,7 +354,7 @@ void main() {
       await _scrollTo(tester, find.byKey(const ValueKey('preview-restore')));
       await tester.tap(find.byKey(const ValueKey('preview-restore')));
       await tester.pumpAndSettle();
-      final previewed = await _waitFor(
+      final previewed = await _waitForVisible(
         tester,
         find.textContaining('Restore preview'),
         maxSeconds: 20,
@@ -428,6 +429,9 @@ Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
 /// Waits up to [maxSeconds] of wall-clock time for [finder] to match,
 /// pumping the tree between real sleeps so background async work (database,
 /// media processing) keeps progressing on the device's real event loop.
+/// Only correct for widgets that are on-screen regardless of scroll
+/// position (app bar, snack bars, current-viewport content); anything that
+/// lives in the main list needs [_waitForVisible] instead.
 Future<bool> _waitFor(
   WidgetTester tester,
   Finder finder, {
@@ -436,6 +440,55 @@ Future<bool> _waitFor(
   final deadline = DateTime.now().add(Duration(seconds: maxSeconds));
   while (DateTime.now().isBefore(deadline)) {
     if (finder.evaluate().isNotEmpty) return true;
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  return finder.evaluate().isNotEmpty;
+}
+
+/// Waits up to [maxSeconds] for [finder] to match a widget inside the main
+/// scrolling journal list. Two independent effects must both land before a
+/// post-write assertion can pass: the async repository reload must complete,
+/// AND the new content must have been laid out at least once — `ListView`
+/// only mounts children within the viewport plus cacheExtent, and
+/// `find.text` only sees mounted elements. Plain `pumpAndSettle`/timed
+/// waits returned false on both device platforms for content below the
+/// fold (iOS at the timeline header, Android at the observation card).
+/// Each attempt therefore sweeps the main list's scroll position across its
+/// full extent in bounded `jumpTo` steps (no gestures, so the pull-to-
+/// refresh never fires), pumping a frame per step so newly scrolled-in
+/// children mount, while real time lets the pending reload finish.
+Future<bool> _waitForVisible(
+  WidgetTester tester,
+  Finder finder, {
+  required int maxSeconds,
+}) async {
+  final deadline = DateTime.now().add(Duration(seconds: maxSeconds));
+  final scrollable = find.byType(Scrollable).first;
+  while (DateTime.now().isBefore(deadline)) {
+    if (finder.evaluate().isNotEmpty) return true;
+    if (scrollable.evaluate().isNotEmpty) {
+      final position = tester.state<ScrollableState>(scrollable).position;
+      // Sweep toward the end until maxScrollExtent stops growing.
+      var stalled = 0;
+      while (stalled < 3 && DateTime.now().isBefore(deadline)) {
+        final before = position.pixels;
+        position.jumpTo(before + 400);
+        await tester.pump();
+        if (finder.evaluate().isNotEmpty) return true;
+        await tester.pump(const Duration(milliseconds: 20));
+        stalled = position.pixels == before ? stalled + 1 : 0;
+      }
+      // Sweep back toward the top for content above the current viewport.
+      while (position.pixels > 0 && DateTime.now().isBefore(deadline)) {
+        final before = position.pixels;
+        position.jumpTo((position.pixels - 400).clamp(0.0, double.infinity));
+        await tester.pump();
+        if (finder.evaluate().isNotEmpty) return true;
+        await tester.pump(const Duration(milliseconds: 20));
+        if (position.pixels == before) break;
+      }
+    }
     await Future<void>.delayed(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 100));
   }
