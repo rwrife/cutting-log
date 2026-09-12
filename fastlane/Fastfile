@@ -4,6 +4,8 @@
 # `flutter build ipa`, which must run from the Flutter project root.
 
 require "base64"
+require "fileutils"
+require "tmpdir"
 
 default_platform(:ios)
 
@@ -79,8 +81,32 @@ platform :ios do
     # `sh` runs from the fastlane/ directory, so each command is anchored to the
     # project root explicitly.
     sh("cd \"#{project_root}\" && flutter pub get --enforce-lockfile")
-    sh("cd \"#{project_root}\" && flutter build ipa --release " \
-       "--build-name=#{build_name} --build-number=#{build_number}")
+
+    with_xcode_signing_credentials do
+      # `flutter build ipa` does not forward -authenticationKey* to xcodebuild, so
+      # automatic signing has no account and fails with "No Accounts" / "No profiles
+      # for com.infinityball.cuttinglog were found". Generate the Flutter artefacts
+      # without signing, then archive once through xcodebuild *with* the API key so
+      # Xcode provisions the app and caches the profiles, and only then hand over to
+      # `flutter build ipa`, which now finds everything it needs.
+      sh("cd \"#{project_root}\" && flutter build ios --release --no-codesign " \
+         "--build-name=#{build_name} --build-number=#{build_number}")
+
+      sh(
+        "cd \"#{project_root}\" && xcodebuild " \
+        "-workspace ios/Runner.xcworkspace -scheme Runner -configuration Release " \
+        "-destination generic/platform=iOS " \
+        "-archivePath \"#{signing_workdir}/Runner.xcarchive\" " \
+        "-allowProvisioningUpdates " \
+        "-authenticationKeyPath \"#{api_key_file}\" " \
+        '-authenticationKeyID "$ASC_KEY_ID" ' \
+        '-authenticationKeyIssuerID "$ASC_ISSUER_ID" ' \
+        "archive"
+      )
+
+      sh("cd \"#{project_root}\" && flutter build ipa --release " \
+         "--build-name=#{build_name} --build-number=#{build_number}")
+    end
 
     {
       api_key: api_key,
@@ -110,6 +136,35 @@ end
 # problem surfaces as a readable message instead of "string contains null byte"
 # from deep inside OpenSSL. No key material is ever logged.
 def app_store_api_key_base64
+  Base64.strict_encode64(app_store_api_key_pem)
+end
+
+# Writes the .p8 to a private temporary directory for the duration of the block so
+# xcodebuild can authenticate with -authenticationKeyPath, then removes it. The key
+# never lands anywhere tracked; *.p8 is gitignored as a second line of defence.
+def with_xcode_signing_credentials
+  @signing_workdir = Dir.mktmpdir("asc-signing")
+  @api_key_file = File.join(@signing_workdir, "AuthKey_#{required_env('ASC_KEY_ID')}.p8")
+  File.write(@api_key_file, app_store_api_key_pem)
+  File.chmod(0o600, @api_key_file)
+  yield
+ensure
+  FileUtils.rm_rf(@signing_workdir) if @signing_workdir
+  @signing_workdir = nil
+  @api_key_file = nil
+end
+
+def signing_workdir
+  @signing_workdir || UI.user_error!("signing_workdir used outside with_xcode_signing_credentials")
+end
+
+def api_key_file
+  @api_key_file || UI.user_error!("api_key_file used outside with_xcode_signing_credentials")
+end
+
+def app_store_api_key_pem
+  return @app_store_api_key_pem if @app_store_api_key_pem
+
   raw = required_env("ASC_KEY_P8").strip
   pem = raw.start_with?("-----BEGIN") ? raw : Base64.decode64(raw)
 
@@ -135,7 +190,7 @@ def app_store_api_key_base64
   end
 
   UI.message("ASC_KEY_P8 -> #{pem.bytesize} bytes, #{pem.lines.first.strip}")
-  Base64.strict_encode64(pem)
+  @app_store_api_key_pem = pem
 end
 
 def required_env(name)

@@ -53,6 +53,7 @@ jobs:
           dart --version
           xcodebuild -version
           fastlane --version
+          flutter build ipa --help
       - name: Run fastlane
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
