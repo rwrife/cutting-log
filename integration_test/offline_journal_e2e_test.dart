@@ -177,6 +177,12 @@ void main() {
       await _enterText(tester, 'Medium (optional)', 'Water');
       await _tapVisible(tester, find.byKey(const ValueKey('start-cutting')));
       await tester.pumpAndSettle();
+      // The timeline section renders only once the async reload after
+      // 'Start cutting' resolves _cutting; pumpAndSettle alone returned
+      // before that completed on the first iOS simulator run ('Found 0
+      // widgets'). scrollUntilVisible pumps until the header exists and
+      // brings it into view, then the assertion is precise.
+      await _scrollTo(tester, find.text('E2E node A timeline'));
       expect(find.text('E2E node A timeline'), findsOneWidget);
 
       await _enterText(
@@ -357,8 +363,10 @@ void main() {
       expect(restored, isTrue);
       record('restoreApplied', true);
 
-      // 9. The restored journal shows the original lineage again.
-      await _scrollTo(tester, find.text('Parent plants'));
+      // 9. The restored journal shows the original lineage again. Apply
+      // restore resets selection and re-renders asynchronously; wait by
+      // scrolling until the restored parent card is actually rendered.
+      await _scrollTo(tester, find.text('E2E pothos'));
       expect(find.text('E2E pothos'), findsOneWidget);
       record('restoredLineageVisible', true);
       await _screenshot(

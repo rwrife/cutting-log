@@ -126,6 +126,23 @@ jobs:
           java -version
       - run: flutter pub get --enforce-lockfile
       - run: flutter build apk --debug
+      - name: Enable KVM group perms
+        # Every prior run of this job logged "ProbeKVM: This user doesn't
+        # have permissions to use KVM" and fell back to pure software
+        # emulation: boots took 9-14 min, a 12MB APK install took 9 min,
+        # and the Gradle/UTP installer gave up at its fixed 360s timeout
+        # (run 34561201871: "adb command [install-multiple ...] failed due
+        # to timeout. Timed out waiting for 360000 ms", 0 tests executed).
+        # GitHub-hosted ubuntu runners ship /dev/kvm but the runner user is
+        # not in the kvm group; the documented fix is a world-readable udev
+        # rule (github.blog changelog 2024-04-02, hardware-accelerated
+        # Android virtualization). With KVM the boot is ~10s and installs
+        # finish in seconds.
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
       - name: Run full journal journey on API 34 emulator
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
