@@ -412,11 +412,15 @@ Future<void> _enterText(WidgetTester tester, String label, String value) async {
 }
 
 Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
-  await tester.scrollUntilVisible(
-    finder,
-    300,
-    scrollable: find.byType(Scrollable).first,
-  );
+  // `scrollUntilVisible` drags in one direction only, so content above the
+  // current viewport can never come back into view — and the async reloads
+  // plus scroll sweeps in earlier steps routinely leave the next target
+  // mounted above (or unmounted outside cacheExtent). Wait until the
+  // finder is mounted (the sweep searches both directions), then let the
+  // scrollable itself place it on screen via ensureVisible.
+  final mounted = await _waitForVisible(tester, finder, maxSeconds: 25);
+  expect(mounted, isTrue, reason: 'Could not bring $finder into the tree.');
+  await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
 }
 
