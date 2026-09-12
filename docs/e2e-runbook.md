@@ -32,7 +32,14 @@ The scaffold itself is pinned by `test/platform/journey_configuration_test.dart`
 
 The CI job `android-e2e` runs this on every push/PR:
 
-- Runner: GitHub `ubuntu-latest` (KVM-accelerated hosted runners).
+- Runner: GitHub `ubuntu-latest`. Note: the hosted image ships `/dev/kvm`
+  but does not add the runner user to the `kvm` group, so the job first
+  applies a world-readable udev rule (`99-kvm4all.rules`) to enable
+  hardware acceleration. Without it the emulator falls back to pure
+  software emulation — boots take 9–14 minutes and APK installs exceed
+  the Gradle/UTP installer's fixed 360s timeout (observed in runs
+  34551678478 / 34561201871, both with 0 tests executed). With the rule
+  the boot completes in under a minute.
 - Device: API 34 `google_apis` `x86_64` emulator, Pixel 5 profile, via
   `ReactiveCircus/android-emulator-runner@v2.38.0`.
 - Steps: `flutter build apk --debug`, then `connectedDebugAndroidTest`
