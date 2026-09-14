@@ -2,6 +2,7 @@
 
 ## 0.1.0-rc.1 (unreleased)
 
+- Polished the everyday UX (issue #20): the home screen now opens with a "What is Cutting Log?" explainer card linking to a new offline in-app how-to guide; export/restore/media-review/library-deletion tools moved to a dedicated Advanced data tools screen behind an app-bar action; the offline/storage notice tiles were removed from the main flow; parent plants can carry one of twelve built-in plant icons (persisted as stable keys, schema v3); and data entry is faster with Method/Medium dropdown defaults and an auto-filled "Cutting N" name when the name is left blank.
 - Reached MVP feature parity for local capture, review, reminders, app-private media, and export/restore workflows.
 - Added release-candidate automation:
   - `tool/build_android_release.sh` for Android release + debug fallback artifacts.
