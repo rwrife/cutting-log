@@ -114,6 +114,7 @@ final class InMemoryJournalDataRepository implements JournalDataRepository {
         nickname: p.nickname,
         speciesText: p.speciesText,
         notes: p.notes,
+        iconKey: p.iconKey,
         createdAtUtc: p.createdAtUtc,
         updatedAtUtc: at,
         archivedAtUtc: at,

@@ -37,4 +37,4 @@ creating duplicates.
 - Full-library erase clears all journal tables, app-private copied media, app cache entries, and attempts to cancel app-owned pending reminder notification IDs.
 - Platform limitation: if Android or iOS has already copied app-private files into an OS-level/cloud device backup, local erase cannot retract those external snapshots.
 
-Schema version 1 is represented by `test/fixtures/schema_v1.sql`. Version 2 adds the reminder timezone identifier with a conservative `UTC` value for existing rows and creates query indexes. Migration runs with foreign keys enabled and is covered by a file-backed fixture test.
+Schema version 1 is represented by `test/fixtures/schema_v1.sql`. Version 2 adds the reminder timezone identifier with a conservative `UTC` value for existing rows and creates query indexes. Version 3 adds a nullable `icon_key` column to parent plants; migrated rows keep `NULL` (no icon) and unknown keys restored from future palettes degrade to "no icon" rather than failing. Migration runs with foreign keys enabled and is covered by a file-backed fixture test.

@@ -43,6 +43,7 @@ final class ParentPlant {
     this.speciesText,
     this.notes = '',
     this.archivedAtUtc,
+    this.iconKey,
   }) : nickname = _requiredText(nickname, 'nickname', 80) {
     _utc(createdAtUtc, 'createdAtUtc');
     _utc(updatedAtUtc, 'updatedAtUtc');
@@ -54,6 +55,7 @@ final class ParentPlant {
     }
     _optionalText(speciesText, 'speciesText', 160);
     _optionalText(notes, 'notes', 10000);
+    _optionalText(iconKey, 'iconKey', 40);
   }
 
   final DateTime? archivedAtUtc;
@@ -63,6 +65,12 @@ final class ParentPlant {
   final String notes;
   final String? speciesText;
   final DateTime updatedAtUtc;
+
+  /// Stable key into the app's built-in plant icon palette, or null when the
+  /// user has not chosen one. The key (not a glyph or index) is what the
+  /// database and backup archives store, so palette changes never corrupt
+  /// restored data.
+  final String? iconKey;
 }
 
 final class Cutting {

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:cutting_log/src/application/capture_workflow.dart';
 import 'package:cutting_log/src/application/media_workflow.dart';
 import 'package:cutting_log/src/application/portability_workflow.dart';
@@ -10,7 +8,11 @@ import 'package:cutting_log/src/data/app_private_media_store.dart';
 import 'package:cutting_log/src/domain/journal_data_repository.dart';
 import 'package:cutting_log/src/domain/journal_entities.dart';
 import 'package:cutting_log/src/domain/journal_overview.dart';
+import 'package:cutting_log/src/domain/plant_icons.dart';
 import 'package:cutting_log/src/domain/startup_policy.dart';
+import 'package:cutting_log/src/features/home/advanced_page.dart';
+import 'package:cutting_log/src/features/home/how_to_use_page.dart';
+import 'package:cutting_log/src/features/home/plant_icon_picker.dart';
 import 'package:cutting_log/src/platform/local_notification_gateway.dart';
 import 'package:cutting_log/src/platform/photo_import_gateway.dart';
 import 'package:flutter/material.dart';
@@ -40,15 +42,29 @@ final class _JournalHomePageState extends State<JournalHomePage> {
   final _parentSpecies = TextEditingController();
   final _parentNotes = TextEditingController();
   final _cuttingName = TextEditingController();
-  final _method = TextEditingController(text: 'Stem');
-  final _medium = TextEditingController();
   final _location = TextEditingController();
   final _tags = TextEditingController();
   final _initialNote = TextEditingController();
   final _eventNote = TextEditingController();
   final _photoCaption = TextEditingController();
   final _search = TextEditingController();
-  final _restoreArchivePath = TextEditingController();
+
+  static const List<String> _methodChoices = <String>[
+    'Stem',
+    'Leaf',
+    'Root',
+    'Division',
+    'Air layer',
+    'Water propagation',
+  ];
+  static const List<String> _mediumChoices = <String>[
+    'Water',
+    'Soil',
+    'Perlite',
+    'Sphagnum moss',
+    'Vermiculite',
+    'Sand',
+  ];
 
   List<ParentPlant> _parents = const <ParentPlant>[];
   List<Cutting> _cuttings = const <Cutting>[];
@@ -70,10 +86,9 @@ final class _JournalHomePageState extends State<JournalHomePage> {
   bool _loading = true;
   bool _saving = false;
   String? _error;
-  MediaStorageReport? _mediaReport;
-  RestorePreview? _restorePreview;
-  RestoreConflictPolicy _restorePolicy = RestoreConflictPolicy.keepExisting;
-  String? _latestExportPath;
+  String? _newParentIconKey;
+  String _methodValue = _methodChoices.first;
+  String _mediumValue = _mediumChoices.first;
 
   JournalDataRepository? get _repository => widget.dataRepository;
   CaptureWorkflow? get _workflow =>
@@ -94,15 +109,12 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       _parentSpecies,
       _parentNotes,
       _cuttingName,
-      _method,
-      _medium,
       _location,
       _tags,
       _initialNote,
       _eventNote,
       _photoCaption,
       _search,
-      _restoreArchivePath,
     ]) {
       controller.dispose();
     }
@@ -151,9 +163,6 @@ final class _JournalHomePageState extends State<JournalHomePage> {
         ),
         nowUtc: DateTime.now().toUtc(),
       );
-      final mediaReport = _mediaWorkflow == null
-          ? null
-          : await _mediaWorkflow!.inspectStorage();
       if (!mounted) return;
       setState(() {
         _parents = parents;
@@ -165,7 +174,6 @@ final class _JournalHomePageState extends State<JournalHomePage> {
         _reminders = reminders;
         _siblings = siblings;
         _reviewItems = reviewItems;
-        _mediaReport = mediaReport;
         _loading = false;
         _error = null;
       });
@@ -229,156 +237,6 @@ final class _JournalHomePageState extends State<JournalHomePage> {
     return fallback;
   }
 
-  Future<void> _exportLocalBackup() async {
-    final workflow = _portabilityWorkflow;
-    if (workflow == null) return;
-
-    PortabilityExportResult? result;
-    final saved = await _run(() async {
-      result = await workflow.exportLibrary(includeMedia: true);
-    });
-    if (!saved || !mounted || result == null) return;
-
-    setState(() {
-      _latestExportPath = result!.archiveFile.path;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Saved backup ZIP and CSV exports to app-private storage at ${result!.archiveFile.path}.',
-        ),
-      ),
-    );
-  }
-
-  Future<void> _previewRestore() async {
-    final workflow = _portabilityWorkflow;
-    if (workflow == null) return;
-    final archivePath = _restoreArchivePath.text.trim();
-    if (archivePath.isEmpty) {
-      setState(() {
-        _error = 'Enter a local backup ZIP path before previewing restore.';
-      });
-      return;
-    }
-
-    RestorePreview? preview;
-    final saved = await _run(() async {
-      preview = await workflow.previewRestoreArchive(File(archivePath));
-    });
-    if (!saved || !mounted || preview == null) return;
-    setState(() {
-      _restorePreview = preview;
-    });
-  }
-
-  Future<void> _applyRestore() async {
-    final workflow = _portabilityWorkflow;
-    final preview = _restorePreview;
-    if (workflow == null || preview == null) {
-      setState(() {
-        _error = 'Preview a restore archive first so additions/conflicts can be reviewed.';
-      });
-      return;
-    }
-
-    final accepted = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Apply restore?'),
-        content: Text(
-          'Policy: ${_restorePolicy.name}. '
-          'Additions: ${preview.totalAdditions}. Conflicts: ${preview.totalConflicts}.',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Apply restore'),
-          ),
-        ],
-      ),
-    );
-    if (accepted != true || !mounted) return;
-
-    RestoreApplyResult? result;
-    final saved = await _run(() async {
-      result = await workflow.applyRestorePreview(
-        preview: preview,
-        conflictPolicy: _restorePolicy,
-      );
-    });
-    if (!saved || !mounted || result == null) return;
-
-    setState(() {
-      _restorePreview = null;
-      _parent = null;
-      _cutting = null;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Restore complete: ${result!.appliedParents} parents, '
-          '${result!.appliedCuttings} cuttings, ${result!.appliedEvents} events, '
-          '${result!.appliedMediaAssets} media assets, ${result!.appliedReminders} reminders.',
-        ),
-      ),
-    );
-  }
-
-  Future<void> _eraseLibrary() async {
-    final workflow = _portabilityWorkflow;
-    if (workflow == null) return;
-
-    final accepted = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete full local library?'),
-        content: const Text(
-          'This erases local database records, copied media files, reminder links, and temporary cache data. '
-          'Some OS-level backups created outside this app may still exist until removed by the user.',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete local library'),
-          ),
-        ],
-      ),
-    );
-    if (accepted != true || !mounted) return;
-
-    EraseLibraryResult? result;
-    final saved = await _run(() async {
-      result = await workflow.eraseLibrary();
-    });
-    if (!saved || !mounted || result == null) return;
-
-    setState(() {
-      _parent = null;
-      _cutting = null;
-      _restorePreview = null;
-      _latestExportPath = null;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Deleted ${result!.parentsDeleted} parents, ${result!.cuttingsDeleted} cuttings, '
-          '${result!.eventsDeleted} events, ${result!.mediaAssetsDeleted} media assets, '
-          '${result!.remindersDeleted} reminders and ${result!.mediaFilesDeleted} media files.',
-        ),
-      ),
-    );
-  }
-
   String _fieldLabel(String name) => switch (name) {
     'nickname' => 'Parent nickname',
     'name' => 'Cutting name',
@@ -387,6 +245,56 @@ final class _JournalHomePageState extends State<JournalHomePage> {
     'tags' => 'Tags',
     _ => 'Entry',
   };
+
+  void _openAdvancedTools() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => AdvancedToolsPage(
+          portabilityWorkflow: _portabilityWorkflow,
+          mediaWorkflow: _mediaWorkflow,
+          onLibraryChanged: () {
+            setState(() {
+              _parent = null;
+              _cutting = null;
+            });
+            _reload();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _openHowToUse() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (context) => const HowToUsePage()));
+  }
+
+  Future<void> _pickNewParentIcon() async {
+    final picked = await showPlantIconPicker(
+      context,
+      selectedKey: _newParentIconKey,
+    );
+    if (!mounted) return;
+    final selection = plantIconSelectionFrom(picked);
+    if (!selection.changed) return;
+    setState(() => _newParentIconKey = selection.key);
+  }
+
+  Future<void> _changeParentIcon(ParentPlant parent) async {
+    final picked = await showPlantIconPicker(
+      context,
+      selectedKey: parent.iconKey,
+    );
+    if (!mounted) return;
+    final selection = plantIconSelectionFrom(picked);
+    if (!selection.changed) return;
+    await _run(
+      () =>
+          _workflow!.setParentIcon(parentId: parent.id, iconKey: selection.key),
+      selectParent: parent.id,
+    );
+  }
 
   Future<void> _createParent() async {
     final workflow = _workflow;
@@ -399,12 +307,14 @@ final class _JournalHomePageState extends State<JournalHomePage> {
             ? null
             : _parentSpecies.text.trim(),
         notes: _parentNotes.text,
+        iconKey: _newParentIconKey,
       );
     });
     if (saved) {
       _parentName.clear();
       _parentSpecies.clear();
       _parentNotes.clear();
+      setState(() => _newParentIconKey = null);
       await _selectParent(created!);
     }
   }
@@ -427,9 +337,9 @@ final class _JournalHomePageState extends State<JournalHomePage> {
     final saved = await _run(() async {
       created = await workflow.startCutting(
         parentId: parent.id,
-        name: _cuttingName.text,
-        method: _method.text,
-        medium: _medium.text,
+        name: _nextCuttingName(parent),
+        method: _methodValue,
+        medium: _mediumValue,
         location: _location.text,
         tags: _tags.text.split(',').where((tag) => tag.trim().isNotEmpty),
         startedAtUtc: _startedAt,
@@ -437,13 +347,29 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       );
     }, selectParent: parent.id);
     if (saved) {
-      _cuttingName.clear();
-      _medium.clear();
       _location.clear();
       _tags.clear();
       _initialNote.clear();
       await _reload(selectParent: parent.id, selectCutting: created!.id);
     }
+  }
+
+  /// Uses the typed cutting name if present, otherwise a pre-filled default
+  /// ("Cutting N") so a new cutting can start without inventing an
+  /// identifier. Falls back with a numeric suffix if the default collides
+  /// with an active sibling name.
+  String _nextCuttingName(ParentPlant parent) {
+    final typed = _cuttingName.text.trim();
+    if (typed.isNotEmpty) return typed;
+    final taken = _cuttings
+        .where((cutting) => cutting.archivedAtUtc == null)
+        .map((cutting) => cutting.name.toLowerCase())
+        .toSet();
+    var index = 1;
+    while (taken.contains('cutting $index')) {
+      index++;
+    }
+    return 'Cutting $index';
   }
 
   Future<void> _pickStartDate() async {
@@ -556,37 +482,6 @@ final class _JournalHomePageState extends State<JournalHomePage> {
     );
   }
 
-  Future<void> _clearAllLocalMedia() async {
-    final mediaWorkflow = _mediaWorkflow;
-    final cutting = _cutting;
-    if (mediaWorkflow == null || cutting == null) return;
-    final approved = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove all local media?'),
-        content: const Text(
-          'This deletes all locally stored photo files and media references from this device.',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove all'),
-          ),
-        ],
-      ),
-    );
-    if (approved != true) return;
-    await _run(
-      () => mediaWorkflow.clearAllLocalMedia(),
-      selectParent: cutting.parentId,
-      selectCutting: cutting.id,
-    );
-  }
-
   Future<void> _changeStage(CuttingStage stage) async {
     final workflow = _workflow;
     final cutting = _cutting;
@@ -652,25 +547,31 @@ final class _JournalHomePageState extends State<JournalHomePage> {
   Widget build(BuildContext context) {
     const policy = StartupPolicy();
     return Scaffold(
-      appBar: AppBar(title: const Text('Cutting Log')),
+      appBar: AppBar(
+        title: const Text('Cutting Log'),
+        actions: <Widget>[
+          IconButton(
+            key: const ValueKey<String>('how-to-use'),
+            tooltip: 'How to use Cutting Log',
+            onPressed: _openHowToUse,
+            icon: const Icon(Icons.help_outline),
+          ),
+          IconButton(
+            key: const ValueKey<String>('advanced-tools'),
+            tooltip: 'Advanced data tools',
+            onPressed: _openAdvancedTools,
+            icon: const Icon(Icons.tune),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _reload,
           child: ListView(
             padding: const EdgeInsets.all(24),
             children: <Widget>[
-              Semantics(
-                container: true,
-                label: 'Private journal ready',
-                child: Text(
-                  'Observe each cutting over time',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Stored privately on this device. No account, network, or optional permission is needed.',
-              ),
+              _explainerCard(),
+              const SizedBox(height: 16),
               if (_loading) ...<Widget>[
                 const SizedBox(height: 24),
                 Center(
@@ -696,8 +597,6 @@ final class _JournalHomePageState extends State<JournalHomePage> {
                   const SizedBox(height: 24),
                   _timelineSection(),
                 ],
-                const SizedBox(height: 24),
-                _portabilitySection(),
               ],
               const SizedBox(height: 24),
               const Card(
@@ -715,6 +614,43 @@ final class _JournalHomePageState extends State<JournalHomePage> {
     );
   }
 
+  Widget _explainerCard() => Semantics(
+    container: true,
+    label: 'Private journal ready',
+    child: Card.filled(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'What is Cutting Log?',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'A private, offline journal for plant propagation: link each '
+              'cutting to its parent plant, log dated observations and '
+              'photos, set optional check-ins, and review how your '
+              'propagation experiments are going. Everything stays on this '
+              'device.',
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const ValueKey<String>('open-how-to-use'),
+                onPressed: _openHowToUse,
+                icon: const Icon(Icons.menu_book_outlined),
+                label: const Text('Read the full how-to guide'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
   Widget _errorPanel() => Semantics(
     liveRegion: true,
     child: MaterialBanner(
@@ -724,124 +660,6 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       ],
     ),
   );
-
-  Widget _portabilitySection() {
-    final workflowAvailable = _portabilityWorkflow != null;
-    final preview = _restorePreview;
-    final potentialSkips = preview == null
-        ? 0
-        : preview.parents.potentialSkips +
-              preview.cuttings.potentialSkips +
-              preview.events.potentialSkips +
-              preview.mediaAssets.potentialSkips +
-              preview.reminders.potentialSkips;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Text(
-              'Export, restore, and erase local data',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Backups can contain sensitive notes and photos. Cutting Log never uploads backups automatically; sharing/export is always user-initiated.',
-            ),
-            const SizedBox(height: 12),
-            if (!workflowAvailable)
-              const Text(
-                'Portability controls are unavailable in this runtime.',
-              )
-            else ...<Widget>[
-              FilledButton.icon(
-                key: const ValueKey<String>('export-backup'),
-                onPressed: _saving ? null : _exportLocalBackup,
-                icon: const Icon(Icons.download_outlined),
-                label: const Text('Create local backup (ZIP + CSV)'),
-              ),
-              if (_latestExportPath != null) ...<Widget>[
-                const SizedBox(height: 8),
-                SelectableText('Latest export: $_latestExportPath'),
-              ],
-              const SizedBox(height: 16),
-              _field(_restoreArchivePath, 'Restore archive path (.zip)'),
-              DropdownButtonFormField<RestoreConflictPolicy>(
-                initialValue: _restorePolicy,
-                decoration: const InputDecoration(
-                  labelText: 'Conflict policy',
-                  border: OutlineInputBorder(),
-                ),
-                items: RestoreConflictPolicy.values
-                    .map(
-                      (value) => DropdownMenuItem<RestoreConflictPolicy>(
-                        value: value,
-                        child: Text(value.name),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: _saving
-                    ? null
-                    : (value) {
-                        if (value == null) return;
-                        setState(() => _restorePolicy = value);
-                      },
-              ),
-              if (preview != null) ...<Widget>[
-                const SizedBox(height: 12),
-                Text(
-                  'Restore preview — additions: ${preview.totalAdditions}, conflicts: ${preview.totalConflicts}, potential skips: $potentialSkips.',
-                ),
-                Text(
-                  'Parents +${preview.parents.additions}/${preview.parents.conflicts} conflicts · '
-                  'Cuttings +${preview.cuttings.additions}/${preview.cuttings.conflicts} · '
-                  'Events +${preview.events.additions}/${preview.events.conflicts} · '
-                  'Media +${preview.mediaAssets.additions}/${preview.mediaAssets.conflicts} · '
-                  'Reminders +${preview.reminders.additions}/${preview.reminders.conflicts}',
-                ),
-              ],
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: <Widget>[
-                  OutlinedButton.icon(
-                    key: const ValueKey<String>('preview-restore'),
-                    onPressed: _saving ? null : _previewRestore,
-                    icon: const Icon(Icons.preview_outlined),
-                    label: const Text('Preview restore'),
-                  ),
-                  FilledButton.icon(
-                    key: const ValueKey<String>('apply-restore'),
-                    onPressed: _saving || preview == null
-                        ? null
-                        : _applyRestore,
-                    icon: const Icon(Icons.system_update_alt_outlined),
-                    label: const Text('Apply restore'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Restore hardening: archive paths are validated (no absolute/traversal/symlink entries), size limits guard decompression bombs, and record/hash validation happens before mutation.',
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: _saving ? null : _eraseLibrary,
-                icon: const Icon(Icons.delete_forever_outlined),
-                label: const Text('Delete full local library'),
-              ),
-            ],
-            const SizedBox(height: 8),
-            const Text(
-              'Platform note: deleting local data cannot retroactively remove copies that may already exist in external OS/cloud backups.',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _parentSection() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -859,18 +677,31 @@ final class _JournalHomePageState extends State<JournalHomePage> {
         ))
           Card(
             child: ListTile(
+              leading: parentIconLeading(parent.iconKey),
               title: Text(parent.nickname),
               subtitle: parent.speciesText == null
                   ? null
                   : Text(parent.speciesText!),
               selected: _parent?.id == parent.id,
               onTap: () => _selectParent(parent),
-              trailing: IconButton(
-                tooltip: 'Archive ${parent.nickname}',
-                onPressed: _saving
-                    ? null
-                    : () => _run(() => _workflow!.archiveParent(parent.id)),
-                icon: const Icon(Icons.archive_outlined),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  IconButton(
+                    tooltip: parent.iconKey == null
+                        ? 'Choose icon for ${parent.nickname}'
+                        : 'Change icon for ${parent.nickname}',
+                    onPressed: _saving ? null : () => _changeParentIcon(parent),
+                    icon: const Icon(Icons.category_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Archive ${parent.nickname}',
+                    onPressed: _saving
+                        ? null
+                        : () => _run(() => _workflow!.archiveParent(parent.id)),
+                    icon: const Icon(Icons.archive_outlined),
+                  ),
+                ],
               ),
             ),
           ),
@@ -887,6 +718,17 @@ final class _JournalHomePageState extends State<JournalHomePage> {
         action: TextInputAction.next,
       ),
       _field(_parentNotes, 'Parent notes (optional)', maxLines: 2),
+      OutlinedButton.icon(
+        key: const ValueKey<String>('pick-new-parent-icon'),
+        onPressed: _saving ? null : _pickNewParentIcon,
+        icon: parentIconLeading(_newParentIconKey),
+        label: Text(
+          _newParentIconKey == null
+              ? 'Add an icon (optional)'
+              : 'Icon: ${PlantIcons.findByKey(_newParentIconKey)!.label}',
+        ),
+      ),
+      const SizedBox(height: 12),
       FilledButton.icon(
         key: const ValueKey<String>('create-parent'),
         onPressed: _saving ? null : _createParent,
@@ -949,11 +791,22 @@ final class _JournalHomePageState extends State<JournalHomePage> {
         Text('Start a cutting', style: Theme.of(context).textTheme.titleMedium),
         _field(
           _cuttingName,
-          'Unique cutting name',
+          'Cutting name (optional)',
           action: TextInputAction.next,
+          helper: 'Leave blank to use the next available "Cutting N" name.',
         ),
-        _field(_method, 'Method', action: TextInputAction.next),
-        _field(_medium, 'Medium (optional)', action: TextInputAction.next),
+        _choiceField(
+          label: 'Method',
+          value: _methodValue,
+          values: _methodChoices,
+          onChanged: (value) => setState(() => _methodValue = value),
+        ),
+        _choiceField(
+          label: 'Medium',
+          value: _mediumValue,
+          values: _mediumChoices,
+          onChanged: (value) => setState(() => _mediumValue = value),
+        ),
         _field(
           _location,
           'Location text (optional)',
@@ -1026,31 +879,6 @@ final class _JournalHomePageState extends State<JournalHomePage> {
         ),
         const SizedBox(height: 12),
         _field(_photoCaption, 'Photo caption (optional)', maxLines: 2),
-        if (_mediaReport != null)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Local media: ${_mediaReport!.assetCount} assets • ${_mediaReport!.trackedBytes} bytes',
-                  ),
-                  if (_mediaReport!.missingReferences.isNotEmpty)
-                    Text(
-                      'Missing files: ${_mediaReport!.missingReferences.length}',
-                    ),
-                  if (_mediaReport!.orphanedFiles.isNotEmpty)
-                    Text('Orphan files: ${_mediaReport!.orphanedFiles.length}'),
-                  const SizedBox(height: 8),
-                  OutlinedButton(
-                    onPressed: _saving ? null : _clearAllLocalMedia,
-                    child: const Text('Remove all local media'),
-                  ),
-                ],
-              ),
-            ),
-          ),
         if (_events.isEmpty)
           const Text('No timeline events yet.')
         else
@@ -1606,6 +1434,7 @@ final class _JournalHomePageState extends State<JournalHomePage> {
     String label, {
     int maxLines = 1,
     TextInputAction? action,
+    String? helper,
   }) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: TextField(
@@ -1614,8 +1443,35 @@ final class _JournalHomePageState extends State<JournalHomePage> {
       textInputAction: action,
       decoration: InputDecoration(
         labelText: label,
+        helperText: helper,
         border: const OutlineInputBorder(),
       ),
+    ),
+  );
+
+  Widget _choiceField({
+    required String label,
+    required String value,
+    required List<String> values,
+    required ValueChanged<String> onChanged,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: DropdownButtonFormField<String>(
+      initialValue: value,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+      ),
+      items: values
+          .map(
+            (item) => DropdownMenuItem<String>(value: item, child: Text(item)),
+          )
+          .toList(growable: false),
+      onChanged: _saving
+          ? null
+          : (selected) {
+              if (selected != null) onChanged(selected);
+            },
     ),
   );
 

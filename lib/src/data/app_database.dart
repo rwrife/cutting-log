@@ -12,6 +12,10 @@ class ParentPlants extends Table {
 
   TextColumn get notes => text().withDefault(const Constant(''))();
 
+  /// Stable key into the built-in plant icon palette (nullable; null means
+  /// "no icon chosen").
+  TextColumn get iconKey => text().nullable()();
+
   DateTimeColumn get createdAtUtc => dateTime()();
 
   DateTimeColumn get updatedAtUtc => dateTime()();
@@ -156,7 +160,7 @@ final class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -169,8 +173,11 @@ final class AppDatabase extends _$AppDatabase {
       await _createIndexes();
     },
     onUpgrade: (migrator, from, to) async {
-      if (from == 1) {
+      if (from < 2) {
         await migrator.addColumn(reminders, reminders.timeZoneId);
+      }
+      if (from < 3) {
+        await migrator.addColumn(parentPlants, parentPlants.iconKey);
       }
       await _createIndexes();
     },

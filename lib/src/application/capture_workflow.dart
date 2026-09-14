@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:cutting_log/src/domain/journal_data_repository.dart';
 import 'package:cutting_log/src/domain/journal_entities.dart';
+import 'package:cutting_log/src/domain/plant_icons.dart';
 
 /// User-initiated commands for the first capture flow.  This layer owns no UI
 /// and does not request permissions, so journaling remains useful offline.
@@ -21,6 +22,7 @@ final class CaptureWorkflow {
     required String nickname,
     String? speciesText,
     String notes = '',
+    String? iconKey,
   }) async {
     final now = _clock();
     final parent = ParentPlant(
@@ -28,11 +30,34 @@ final class CaptureWorkflow {
       nickname: nickname,
       speciesText: speciesText,
       notes: notes,
+      iconKey: iconKey,
       createdAtUtc: now,
       updatedAtUtc: now,
     );
     await _repository.createParentPlant(parent);
     return parent;
+  }
+
+  Future<void> setParentIcon({
+    required EntityId parentId,
+    required String? iconKey,
+  }) async {
+    final existing = await _repository.getParentPlant(parentId);
+    if (existing == null) {
+      throw const JournalNotFoundException('parent plant does not exist');
+    }
+    await _repository.updateParentPlant(
+      ParentPlant(
+        id: existing.id,
+        nickname: existing.nickname,
+        speciesText: existing.speciesText,
+        notes: existing.notes,
+        iconKey: PlantIcons.normalizeSelection(iconKey),
+        createdAtUtc: existing.createdAtUtc,
+        updatedAtUtc: _clock(),
+        archivedAtUtc: existing.archivedAtUtc,
+      ),
+    );
   }
 
   Future<Cutting> startCutting({
