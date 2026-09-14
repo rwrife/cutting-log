@@ -105,4 +105,39 @@ void main() {
     expect(events.last.note, 'Corrected wording');
     expect(deriveCuttingState(events).outcome, CuttingOutcome.active);
   });
+
+  test(
+    'parent icon selection persists and unknown keys normalize to none',
+    () async {
+      final repository = InMemoryJournalDataRepository();
+      final workflow = CaptureWorkflow(
+        repository,
+        clock: () => DateTime.utc(2026, 1, 1),
+      );
+      final parent = await workflow.createParent(
+        nickname: 'Icon parent',
+        iconKey: 'eco',
+      );
+      expect((await repository.getParentPlant(parent.id))?.iconKey, 'eco');
+
+      await workflow.setParentIcon(parentId: parent.id, iconKey: 'grass');
+      expect((await repository.getParentPlant(parent.id))?.iconKey, 'grass');
+
+      // Unknown keys are treated as "no icon" instead of corrupting storage.
+      await workflow.setParentIcon(parentId: parent.id, iconKey: 'not_a_key');
+      expect((await repository.getParentPlant(parent.id))?.iconKey, isNull);
+
+      await workflow.setParentIcon(parentId: parent.id, iconKey: 'spa');
+      expect((await repository.getParentPlant(parent.id))?.iconKey, 'spa');
+      await workflow.setParentIcon(parentId: parent.id, iconKey: null);
+      expect((await repository.getParentPlant(parent.id))?.iconKey, isNull);
+
+      // Archiving preserves the chosen icon.
+      await workflow.setParentIcon(parentId: parent.id, iconKey: 'park');
+      await workflow.archiveParent(parent.id);
+      final archived = await repository.getParentPlant(parent.id);
+      expect(archived?.iconKey, 'park');
+      expect(archived?.archivedAtUtc, isNotNull);
+    },
+  );
 }

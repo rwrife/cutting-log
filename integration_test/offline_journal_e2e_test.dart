@@ -112,7 +112,8 @@ void main() {
       // ignore: unawaited_futures
       app.main();
 
-      // 1. Journal shell is up on a fresh install with the offline promise.
+      // 1. Journal shell is up on a fresh install with the explainer card
+      // carrying the offline promise.
       // Cold starts on CI runners perform real async work before the first
       // frame (opening the Drift file database, reconciling reminders), which
       // can take several seconds on a debug build. pumpAndSettle returns as
@@ -132,30 +133,48 @@ void main() {
         'startupWallClockMs',
         DateTime.now().difference(startClock).inMilliseconds,
       );
-      final bannerVisible = await _waitFor(
+      final explainerVisible = await _waitFor(
         tester,
-        find.textContaining('Stored privately on this device'),
+        find.textContaining('A private, offline journal for plant'),
         maxSeconds: 20,
       );
       expect(
-        bannerVisible,
+        explainerVisible,
         isTrue,
-        reason: 'Offline promise banner must render.',
+        reason: 'Explainer card with the offline promise must render.',
       );
-      // Capture the full banner text while it is still mounted — the
-      // scroll below unmounts list content and made this record false
-      // even when the banner assertion above passed.
-      final fullBannerVisible = find
-          .textContaining('No account, network, or optional permission')
-          .evaluate()
-          .isNotEmpty;
       record('freshInstallShell', true);
-      record('offlineBannerVisible', fullBannerVisible);
-      // The 'Offline and account-free' status tile exists only in the
-      // repository-less overview variant; the real app renders the
-      // privacy banner instead (verified in this journey above). Scroll
-      // to the section anchors that the real shell renders and assert
-      // against those.
+      record('explainerVisible', explainerVisible);
+
+      // 1b. The explainer links to the in-app how-to guide; open and read it.
+      await _tapVisible(tester, find.byKey(const ValueKey('open-how-to-use')));
+      final guideVisible = await _waitFor(
+        tester,
+        find.text('How to use Cutting Log'),
+        maxSeconds: 20,
+      );
+      expect(guideVisible, isTrue, reason: 'How-to guide must open.');
+      await _screenshot(
+        tester,
+        driver,
+        evidenceRoot,
+        '00-how-to-guide',
+        enabled: !Platform.isAndroid || surfaceConverted,
+      );
+      // Back to the journal shell.
+      final backFinder = find.byTooltip('Back');
+      expect(backFinder, findsWidgets);
+      await tester.tap(backFinder.first);
+      await tester.pumpAndSettle();
+      final homeBackAgain = await _waitFor(
+        tester,
+        find.textContaining('A private, offline journal for plant'),
+        maxSeconds: 20,
+      );
+      expect(homeBackAgain, isTrue, reason: 'Guide must pop back to home.');
+      record('howToGuideOpened', true);
+
+      // Scroll to the section anchors that the real shell renders.
       await _scrollTo(tester, find.text('Parent plants'));
       await _screenshot(
         tester,
@@ -165,8 +184,33 @@ void main() {
         enabled: !Platform.isAndroid || surfaceConverted,
       );
 
-      // 2. Create a parent plant.
+      // 2. Create a parent plant, choosing an icon from the built-in palette.
       await _enterText(tester, 'Parent plant nickname', 'E2E pothos');
+      await _tapVisible(
+        tester,
+        find.byKey(const ValueKey('pick-new-parent-icon')),
+      );
+      final pickerVisible = await _waitFor(
+        tester,
+        find.text('Choose a plant icon'),
+        maxSeconds: 20,
+      );
+      expect(pickerVisible, isTrue, reason: 'Icon picker must open.');
+      await _screenshot(
+        tester,
+        driver,
+        evidenceRoot,
+        '01b-icon-picker',
+        enabled: !Platform.isAndroid || surfaceConverted,
+      );
+      await _tapVisible(tester, find.byKey(const ValueKey('plant-icon-eco')));
+      final iconChosen = await _waitFor(
+        tester,
+        find.text('Icon: Leaf'),
+        maxSeconds: 20,
+      );
+      expect(iconChosen, isTrue, reason: 'Chosen icon must be labeled.');
+      record('parentIconChosen', true);
       await _tapVisible(tester, find.byKey(const ValueKey('create-parent')));
       expect(
         await _waitForVisible(
@@ -179,10 +223,11 @@ void main() {
       );
       record('createParent', true);
 
-      // 3. Start a cutting with a first observation.
-      await _enterText(tester, 'Unique cutting name', 'E2E node A');
-      await _enterText(tester, 'Method', 'Stem');
-      await _enterText(tester, 'Medium (optional)', 'Water');
+      // 3. Start a cutting with a first observation. The cutting name,
+      // method, and medium use the shipped defaults (name blank, Method
+      // = Stem, Medium = Water) — the journey exercises the pre-filled
+      // fast path by only typing the location and the first note.
+      await _enterText(tester, 'Location text (optional)', 'North window');
       await _tapVisible(tester, find.byKey(const ValueKey('start-cutting')));
       // List content below the fold only exists once the async reload has
       // completed AND the ListView has laid it out near the viewport;
@@ -192,7 +237,7 @@ void main() {
       expect(
         await _waitForVisible(
           tester,
-          find.text('E2E node A timeline'),
+          find.text('Cutting 1 timeline'),
           maxSeconds: 30,
         ),
         isTrue,

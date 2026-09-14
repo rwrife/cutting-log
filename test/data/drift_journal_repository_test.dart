@@ -266,7 +266,7 @@ void main() {
   });
 
   test(
-    'migrates the checked-in version 1 fixture to schema version 2',
+    'migrates the checked-in version 1 fixture to schema version 3',
     () async {
       await database.close();
       final temporary = await Directory.systemTemp.createTemp(
@@ -287,12 +287,31 @@ void main() {
         final reminders = await migratedRepository.getReminders(
           EntityId('fixture-cutting'),
         );
+        final parents = await migratedRepository.getParentPlants();
         final version = await migratedDatabase
             .customSelect('PRAGMA user_version')
             .getSingle();
 
-        expect(version.read<int>('user_version'), 2);
+        expect(version.read<int>('user_version'), 3);
         expect(reminders.single.timeZoneId, 'UTC');
+        expect(parents.single.iconKey, isNull);
+
+        // The migrated column accepts updates from pre-existing rows.
+        await migratedRepository.updateParentPlant(
+          ParentPlant(
+            id: parents.single.id,
+            nickname: parents.single.nickname,
+            speciesText: parents.single.speciesText,
+            notes: parents.single.notes,
+            iconKey: 'eco',
+            createdAtUtc: parents.single.createdAtUtc,
+            updatedAtUtc: DateTime.now().toUtc(),
+          ),
+        );
+        expect(
+          (await migratedRepository.getParentPlant(parents.single.id))?.iconKey,
+          'eco',
+        );
         await migratedDatabase.close();
       } finally {
         await temporary.delete(recursive: true);

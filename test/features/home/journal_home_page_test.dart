@@ -26,6 +26,13 @@ void main() {
       find.bySemanticsLabel(RegExp('Private journal ready')),
       findsOneWidget,
     );
+    // The explainer card occupies the first viewport at 2x text, so the
+    // overview tiles now need one scroll step.
+    await tester.scrollUntilVisible(
+      find.bySemanticsLabel(RegExp('Parent plants: 0')),
+      200,
+    );
+    await tester.pumpAndSettle();
     expect(find.bySemanticsLabel(RegExp('Parent plants: 0')), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('Active cuttings: 0')), findsOneWidget);
 
@@ -64,12 +71,8 @@ void main() {
     expect(find.text('Cuttings for Test parent'), findsOneWidget);
 
     await tester.enterText(
-      find.widgetWithText(TextField, 'Unique cutting name'),
+      find.widgetWithText(TextField, 'Cutting name (optional)'),
       'Node A',
-    );
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Medium (optional)'),
-      'Water',
     );
     await tester.enterText(
       find.widgetWithText(TextField, 'Location text (optional)'),
@@ -198,6 +201,152 @@ void main() {
     expect(find.textContaining('Overdue check-in'), findsOneWidget);
     expect(tester.takeException(), isNull);
     semantics.dispose();
+  });
+
+  testWidgets('explainer card explains the app and links to the guide', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      CuttingLogApp(
+        overview: const JournalOverview(
+          parentPlantCount: 0,
+          activeCuttingCount: 0,
+        ),
+        dataRepository: InMemoryJournalDataRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('What is Cutting Log?'), findsOneWidget);
+    expect(find.text('Read the full how-to guide'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('open-how-to-use')));
+    await tester.pumpAndSettle();
+    expect(find.text('How to use Cutting Log'), findsOneWidget);
+    expect(find.text('Basic flow'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.textContaining('does not diagnose plants'),
+      300,
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('does not diagnose plants'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('portability tools moved to the separate advanced screen', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      CuttingLogApp(
+        overview: const JournalOverview(
+          parentPlantCount: 0,
+          activeCuttingCount: 0,
+        ),
+        dataRepository: InMemoryJournalDataRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The home screen no longer carries the everyday-data clutter.
+    expect(find.text('Export, restore, and erase local data'), findsNothing);
+    expect(find.byKey(const ValueKey('export-backup')), findsNothing);
+
+    await _tapVisible(tester, find.byKey(const ValueKey('advanced-tools')));
+    await tester.pumpAndSettle();
+    expect(find.text('Advanced data tools'), findsOneWidget);
+    expect(
+      find.textContaining('never uploads backups automatically'),
+      findsOneWidget,
+    );
+    // This runtime wires no portability workflow, so the tools report
+    // themselves unavailable rather than disappearing silently.
+    expect(find.textContaining('unavailable in this runtime'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a dozen plant icons are offered and persist on the parent', (
+    tester,
+  ) async {
+    final repository = InMemoryJournalDataRepository();
+    await tester.pumpWidget(
+      CuttingLogApp(
+        overview: const JournalOverview(
+          parentPlantCount: 0,
+          activeCuttingCount: 0,
+        ),
+        dataRepository: repository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Parent plant nickname'),
+      'Icon parent',
+    );
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('pick-new-parent-icon')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a plant icon'), findsOneWidget);
+    expect(find.byKey(const ValueKey('plant-icon-eco')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('plant-icon-local_florist')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('plant-icon-local_florist')));
+    await tester.pumpAndSettle();
+    expect(find.text('Icon: Flower'), findsOneWidget);
+
+    await _tapVisible(tester, find.byKey(const ValueKey('create-parent')));
+    await tester.pumpAndSettle();
+
+    final parents = await repository.getParentPlants();
+    expect(parents.single.iconKey, 'local_florist');
+  });
+
+  testWidgets('method and medium are dropdowns and the name can be blank', (
+    tester,
+  ) async {
+    final repository = InMemoryJournalDataRepository();
+    await tester.pumpWidget(
+      CuttingLogApp(
+        overview: const JournalOverview(
+          parentPlantCount: 0,
+          activeCuttingCount: 0,
+        ),
+        dataRepository: repository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Parent plant nickname'),
+      'Defaults parent',
+    );
+    await _tapVisible(tester, find.byKey(const ValueKey('create-parent')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.widgetWithText(DropdownButtonFormField<String>, 'Method'),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(DropdownButtonFormField<String>, 'Medium'),
+      findsOneWidget,
+    );
+
+    // Start a cutting without typing any identifier at all.
+    await _tapVisible(tester, find.byKey(const ValueKey('start-cutting')));
+    await tester.pumpAndSettle();
+    expect(find.text('Cutting 1 timeline'), findsOneWidget);
+
+    final parents = await repository.getParentPlants();
+    final cuttings = await repository.getCuttings(parentId: parents.single.id);
+    expect(cuttings.single.name, 'Cutting 1');
+    expect(cuttings.single.method, 'Stem');
+    expect(cuttings.single.medium, 'Water');
   });
 }
 

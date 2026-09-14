@@ -69,6 +69,11 @@ void main() {
       );
 
       expect(parents.map((value) => value.id.value), contains('parent-1'));
+      expect(
+        parents.firstWhere((value) => value.id.value == 'parent-1').iconKey,
+        'eco',
+        reason: 'Chosen plant icons must survive export/restore.',
+      );
       expect(cuttings.single.tags, <String>['north', 'water']);
       expect(events.map((value) => value.id.value), <String>[
         'event-1',
@@ -293,6 +298,7 @@ Future<void> _seedFullLibrary(_Harness harness) async {
     id: EntityId('parent-1'),
     nickname: 'Monstera Mother',
     notes: 'Private note',
+    iconKey: 'eco',
     createdAtUtc: now,
     updatedAtUtc: now,
   );

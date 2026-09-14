@@ -50,6 +50,17 @@ class $ParentPlantsTable extends ParentPlants
     requiredDuringInsert: false,
     defaultValue: const Constant(''),
   );
+  static const VerificationMeta _iconKeyMeta = const VerificationMeta(
+    'iconKey',
+  );
+  @override
+  late final GeneratedColumn<String> iconKey = GeneratedColumn<String>(
+    'icon_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtUtcMeta = const VerificationMeta(
     'createdAtUtc',
   );
@@ -90,6 +101,7 @@ class $ParentPlantsTable extends ParentPlants
     nickname,
     speciesText,
     notes,
+    iconKey,
     createdAtUtc,
     updatedAtUtc,
     archivedAtUtc,
@@ -132,6 +144,12 @@ class $ParentPlantsTable extends ParentPlants
       context.handle(
         _notesMeta,
         notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
+    }
+    if (data.containsKey('icon_key')) {
+      context.handle(
+        _iconKeyMeta,
+        iconKey.isAcceptableOrUnknown(data['icon_key']!, _iconKeyMeta),
       );
     }
     if (data.containsKey('created_at_utc')) {
@@ -190,6 +208,10 @@ class $ParentPlantsTable extends ParentPlants
         DriftSqlType.string,
         data['${effectivePrefix}notes'],
       )!,
+      iconKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}icon_key'],
+      ),
       createdAtUtc: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at_utc'],
@@ -216,6 +238,10 @@ class ParentPlantRow extends DataClass implements Insertable<ParentPlantRow> {
   final String nickname;
   final String? speciesText;
   final String notes;
+
+  /// Stable key into the built-in plant icon palette (nullable; null means
+  /// "no icon chosen").
+  final String? iconKey;
   final DateTime createdAtUtc;
   final DateTime updatedAtUtc;
   final DateTime? archivedAtUtc;
@@ -224,6 +250,7 @@ class ParentPlantRow extends DataClass implements Insertable<ParentPlantRow> {
     required this.nickname,
     this.speciesText,
     required this.notes,
+    this.iconKey,
     required this.createdAtUtc,
     required this.updatedAtUtc,
     this.archivedAtUtc,
@@ -237,6 +264,9 @@ class ParentPlantRow extends DataClass implements Insertable<ParentPlantRow> {
       map['species_text'] = Variable<String>(speciesText);
     }
     map['notes'] = Variable<String>(notes);
+    if (!nullToAbsent || iconKey != null) {
+      map['icon_key'] = Variable<String>(iconKey);
+    }
     map['created_at_utc'] = Variable<DateTime>(createdAtUtc);
     map['updated_at_utc'] = Variable<DateTime>(updatedAtUtc);
     if (!nullToAbsent || archivedAtUtc != null) {
@@ -253,6 +283,9 @@ class ParentPlantRow extends DataClass implements Insertable<ParentPlantRow> {
           ? const Value.absent()
           : Value(speciesText),
       notes: Value(notes),
+      iconKey: iconKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(iconKey),
       createdAtUtc: Value(createdAtUtc),
       updatedAtUtc: Value(updatedAtUtc),
       archivedAtUtc: archivedAtUtc == null && nullToAbsent
@@ -271,6 +304,7 @@ class ParentPlantRow extends DataClass implements Insertable<ParentPlantRow> {
       nickname: serializer.fromJson<String>(json['nickname']),
       speciesText: serializer.fromJson<String?>(json['speciesText']),
       notes: serializer.fromJson<String>(json['notes']),
+      iconKey: serializer.fromJson<String?>(json['iconKey']),
       createdAtUtc: serializer.fromJson<DateTime>(json['createdAtUtc']),
       updatedAtUtc: serializer.fromJson<DateTime>(json['updatedAtUtc']),
       archivedAtUtc: serializer.fromJson<DateTime?>(json['archivedAtUtc']),
@@ -284,6 +318,7 @@ class ParentPlantRow extends DataClass implements Insertable<ParentPlantRow> {
       'nickname': serializer.toJson<String>(nickname),
       'speciesText': serializer.toJson<String?>(speciesText),
       'notes': serializer.toJson<String>(notes),
+      'iconKey': serializer.toJson<String?>(iconKey),
       'createdAtUtc': serializer.toJson<DateTime>(createdAtUtc),
       'updatedAtUtc': serializer.toJson<DateTime>(updatedAtUtc),
       'archivedAtUtc': serializer.toJson<DateTime?>(archivedAtUtc),
@@ -295,6 +330,7 @@ class ParentPlantRow extends DataClass implements Insertable<ParentPlantRow> {
     String? nickname,
     Value<String?> speciesText = const Value.absent(),
     String? notes,
+    Value<String?> iconKey = const Value.absent(),
     DateTime? createdAtUtc,
     DateTime? updatedAtUtc,
     Value<DateTime?> archivedAtUtc = const Value.absent(),
@@ -303,6 +339,7 @@ class ParentPlantRow extends DataClass implements Insertable<ParentPlantRow> {
     nickname: nickname ?? this.nickname,
     speciesText: speciesText.present ? speciesText.value : this.speciesText,
     notes: notes ?? this.notes,
+    iconKey: iconKey.present ? iconKey.value : this.iconKey,
     createdAtUtc: createdAtUtc ?? this.createdAtUtc,
     updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
     archivedAtUtc: archivedAtUtc.present
@@ -317,6 +354,7 @@ class ParentPlantRow extends DataClass implements Insertable<ParentPlantRow> {
           ? data.speciesText.value
           : this.speciesText,
       notes: data.notes.present ? data.notes.value : this.notes,
+      iconKey: data.iconKey.present ? data.iconKey.value : this.iconKey,
       createdAtUtc: data.createdAtUtc.present
           ? data.createdAtUtc.value
           : this.createdAtUtc,
@@ -336,6 +374,7 @@ class ParentPlantRow extends DataClass implements Insertable<ParentPlantRow> {
           ..write('nickname: $nickname, ')
           ..write('speciesText: $speciesText, ')
           ..write('notes: $notes, ')
+          ..write('iconKey: $iconKey, ')
           ..write('createdAtUtc: $createdAtUtc, ')
           ..write('updatedAtUtc: $updatedAtUtc, ')
           ..write('archivedAtUtc: $archivedAtUtc')
@@ -349,6 +388,7 @@ class ParentPlantRow extends DataClass implements Insertable<ParentPlantRow> {
     nickname,
     speciesText,
     notes,
+    iconKey,
     createdAtUtc,
     updatedAtUtc,
     archivedAtUtc,
@@ -361,6 +401,7 @@ class ParentPlantRow extends DataClass implements Insertable<ParentPlantRow> {
           other.nickname == this.nickname &&
           other.speciesText == this.speciesText &&
           other.notes == this.notes &&
+          other.iconKey == this.iconKey &&
           other.createdAtUtc == this.createdAtUtc &&
           other.updatedAtUtc == this.updatedAtUtc &&
           other.archivedAtUtc == this.archivedAtUtc);
@@ -371,6 +412,7 @@ class ParentPlantsCompanion extends UpdateCompanion<ParentPlantRow> {
   final Value<String> nickname;
   final Value<String?> speciesText;
   final Value<String> notes;
+  final Value<String?> iconKey;
   final Value<DateTime> createdAtUtc;
   final Value<DateTime> updatedAtUtc;
   final Value<DateTime?> archivedAtUtc;
@@ -380,6 +422,7 @@ class ParentPlantsCompanion extends UpdateCompanion<ParentPlantRow> {
     this.nickname = const Value.absent(),
     this.speciesText = const Value.absent(),
     this.notes = const Value.absent(),
+    this.iconKey = const Value.absent(),
     this.createdAtUtc = const Value.absent(),
     this.updatedAtUtc = const Value.absent(),
     this.archivedAtUtc = const Value.absent(),
@@ -390,6 +433,7 @@ class ParentPlantsCompanion extends UpdateCompanion<ParentPlantRow> {
     required String nickname,
     this.speciesText = const Value.absent(),
     this.notes = const Value.absent(),
+    this.iconKey = const Value.absent(),
     required DateTime createdAtUtc,
     required DateTime updatedAtUtc,
     this.archivedAtUtc = const Value.absent(),
@@ -403,6 +447,7 @@ class ParentPlantsCompanion extends UpdateCompanion<ParentPlantRow> {
     Expression<String>? nickname,
     Expression<String>? speciesText,
     Expression<String>? notes,
+    Expression<String>? iconKey,
     Expression<DateTime>? createdAtUtc,
     Expression<DateTime>? updatedAtUtc,
     Expression<DateTime>? archivedAtUtc,
@@ -413,6 +458,7 @@ class ParentPlantsCompanion extends UpdateCompanion<ParentPlantRow> {
       if (nickname != null) 'nickname': nickname,
       if (speciesText != null) 'species_text': speciesText,
       if (notes != null) 'notes': notes,
+      if (iconKey != null) 'icon_key': iconKey,
       if (createdAtUtc != null) 'created_at_utc': createdAtUtc,
       if (updatedAtUtc != null) 'updated_at_utc': updatedAtUtc,
       if (archivedAtUtc != null) 'archived_at_utc': archivedAtUtc,
@@ -425,6 +471,7 @@ class ParentPlantsCompanion extends UpdateCompanion<ParentPlantRow> {
     Value<String>? nickname,
     Value<String?>? speciesText,
     Value<String>? notes,
+    Value<String?>? iconKey,
     Value<DateTime>? createdAtUtc,
     Value<DateTime>? updatedAtUtc,
     Value<DateTime?>? archivedAtUtc,
@@ -435,6 +482,7 @@ class ParentPlantsCompanion extends UpdateCompanion<ParentPlantRow> {
       nickname: nickname ?? this.nickname,
       speciesText: speciesText ?? this.speciesText,
       notes: notes ?? this.notes,
+      iconKey: iconKey ?? this.iconKey,
       createdAtUtc: createdAtUtc ?? this.createdAtUtc,
       updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
       archivedAtUtc: archivedAtUtc ?? this.archivedAtUtc,
@@ -456,6 +504,9 @@ class ParentPlantsCompanion extends UpdateCompanion<ParentPlantRow> {
     }
     if (notes.present) {
       map['notes'] = Variable<String>(notes.value);
+    }
+    if (iconKey.present) {
+      map['icon_key'] = Variable<String>(iconKey.value);
     }
     if (createdAtUtc.present) {
       map['created_at_utc'] = Variable<DateTime>(createdAtUtc.value);
@@ -479,6 +530,7 @@ class ParentPlantsCompanion extends UpdateCompanion<ParentPlantRow> {
           ..write('nickname: $nickname, ')
           ..write('speciesText: $speciesText, ')
           ..write('notes: $notes, ')
+          ..write('iconKey: $iconKey, ')
           ..write('createdAtUtc: $createdAtUtc, ')
           ..write('updatedAtUtc: $updatedAtUtc, ')
           ..write('archivedAtUtc: $archivedAtUtc, ')
@@ -3152,6 +3204,7 @@ typedef $$ParentPlantsTableCreateCompanionBuilder =
       required String nickname,
       Value<String?> speciesText,
       Value<String> notes,
+      Value<String?> iconKey,
       required DateTime createdAtUtc,
       required DateTime updatedAtUtc,
       Value<DateTime?> archivedAtUtc,
@@ -3163,6 +3216,7 @@ typedef $$ParentPlantsTableUpdateCompanionBuilder =
       Value<String> nickname,
       Value<String?> speciesText,
       Value<String> notes,
+      Value<String?> iconKey,
       Value<DateTime> createdAtUtc,
       Value<DateTime> updatedAtUtc,
       Value<DateTime?> archivedAtUtc,
@@ -3218,6 +3272,11 @@ class $$ParentPlantsTableFilterComposer
 
   ColumnFilters<String> get notes => $composableBuilder(
     column: $table.notes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get iconKey => $composableBuilder(
+    column: $table.iconKey,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3291,6 +3350,11 @@ class $$ParentPlantsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get iconKey => $composableBuilder(
+    column: $table.iconKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAtUtc => $composableBuilder(
     column: $table.createdAtUtc,
     builder: (column) => ColumnOrderings(column),
@@ -3329,6 +3393,9 @@ class $$ParentPlantsTableAnnotationComposer
 
   GeneratedColumn<String> get notes =>
       $composableBuilder(column: $table.notes, builder: (column) => column);
+
+  GeneratedColumn<String> get iconKey =>
+      $composableBuilder(column: $table.iconKey, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAtUtc => $composableBuilder(
     column: $table.createdAtUtc,
@@ -3403,6 +3470,7 @@ class $$ParentPlantsTableTableManager
                 Value<String> nickname = const Value.absent(),
                 Value<String?> speciesText = const Value.absent(),
                 Value<String> notes = const Value.absent(),
+                Value<String?> iconKey = const Value.absent(),
                 Value<DateTime> createdAtUtc = const Value.absent(),
                 Value<DateTime> updatedAtUtc = const Value.absent(),
                 Value<DateTime?> archivedAtUtc = const Value.absent(),
@@ -3412,6 +3480,7 @@ class $$ParentPlantsTableTableManager
                 nickname: nickname,
                 speciesText: speciesText,
                 notes: notes,
+                iconKey: iconKey,
                 createdAtUtc: createdAtUtc,
                 updatedAtUtc: updatedAtUtc,
                 archivedAtUtc: archivedAtUtc,
@@ -3423,6 +3492,7 @@ class $$ParentPlantsTableTableManager
                 required String nickname,
                 Value<String?> speciesText = const Value.absent(),
                 Value<String> notes = const Value.absent(),
+                Value<String?> iconKey = const Value.absent(),
                 required DateTime createdAtUtc,
                 required DateTime updatedAtUtc,
                 Value<DateTime?> archivedAtUtc = const Value.absent(),
@@ -3432,6 +3502,7 @@ class $$ParentPlantsTableTableManager
                 nickname: nickname,
                 speciesText: speciesText,
                 notes: notes,
+                iconKey: iconKey,
                 createdAtUtc: createdAtUtc,
                 updatedAtUtc: updatedAtUtc,
                 archivedAtUtc: archivedAtUtc,
