@@ -1,7 +1,6 @@
 # Fastfile for Cutting Log.
 #
-# Lives at the repository root (not under ios/) because both lanes shell out to
-# `flutter build`, which must run from the Flutter project root.
+# Lives at the repository root and drives the native Xcode project.
 
 require "base64"
 require "fileutils"
@@ -54,11 +53,8 @@ platform :ios do
 
   # Shared build step for both lanes.
   #
-  # The build number is read from App Store Connect and passed to Flutter on the
-  # command line rather than written into the Xcode project. Info.plist takes
-  # CFBundleShortVersionString/CFBundleVersion from $(FLUTTER_BUILD_NAME) and
-  # $(FLUTTER_BUILD_NUMBER), which `flutter build` regenerates on every build, so
-  # `increment_build_number` would be overwritten and silently ineffective.
+  # App Store Connect remains the source of truth for monotonically increasing
+  # build numbers.
   private_lane :build_release_ipa do
     api_key = app_store_connect_api_key(
       key_id: required_env("ASC_KEY_ID"),
@@ -76,30 +72,16 @@ platform :ios do
       initial_build_number: 0
     ).to_i + 1
 
-    build_name = flutter_build_name
+    build_name = marketing_version
 
     UI.message("Building #{APP_IDENTIFIER} #{build_name} (#{build_number}) from #{project_root}")
 
-    # `sh` runs from the fastlane/ directory, so each command is anchored to the
-    # project root explicitly.
-    sh("cd \"#{project_root}\" && flutter pub get --enforce-lockfile")
-
-    # `flutter build ipa` archives and exports in one step, and forwards neither
-    # -allowProvisioningUpdates nor -authenticationKey* to xcodebuild. Without an
-    # Apple account on the runner that fails twice over: the archive cannot fetch a
-    # development profile ("No Accounts"), and the export cannot fetch the
-    # distribution certificate ("No signing certificate \"iOS Distribution\" found").
-    # Flutter still produces the app and Generated.xcconfig, but the two signing
-    # steps are driven directly so the API key reaches them and Xcode can provision
-    # against App Store Connect.
     with_xcode_signing_credentials do
-      sh("cd \"#{project_root}\" && flutter build ios --release --no-codesign " \
-         "--build-name=#{build_name} --build-number=#{build_number}")
-
       archive = File.join(signing_workdir, "Runner.xcarchive")
       sh("cd \"#{project_root}\" && xcodebuild " \
-         "-workspace ios/Runner.xcworkspace -scheme Runner -configuration Release " \
+         "-project ios/Runner.xcodeproj -scheme Runner -configuration Release " \
          "-destination generic/platform=iOS " \
+         "MARKETING_VERSION=#{build_name} CURRENT_PROJECT_VERSION=#{build_number} " \
          "-archivePath \"#{archive}\" " \
          "#{xcodebuild_auth_flags} archive")
 
@@ -123,13 +105,13 @@ end
 
 # --- helpers ----------------------------------------------------------------
 
-# Absolute path to the Flutter project root (the parent of this fastlane/ folder).
+# Absolute path to the repository root (the parent of this fastlane/ folder).
 def project_root
   @project_root ||= begin
     folder = FastlaneCore::FastlaneFolder.path
     root = folder ? File.expand_path("..", folder) : Dir.pwd
-    unless File.exist?(File.join(root, "pubspec.yaml"))
-      UI.user_error!("No pubspec.yaml in #{root}; fastlane/ must sit at the Flutter project root.")
+    unless File.exist?(File.join(root, "ios", "Runner.xcodeproj", "project.pbxproj"))
+      UI.user_error!("No native Xcode project in #{root}.")
     end
     root
   end
@@ -170,8 +152,7 @@ def xcodebuild_auth_flags
     '-authenticationKeyIssuerID "$ASC_ISSUER_ID"'
 end
 
-# Where `flutter build ipa` would have put the IPA, so the rest of the lane and the
-# workflow's artifact upload are unaffected by driving the export ourselves.
+# Stable output used by the release workflow artifact upload.
 def ipa_output_dir
   File.join(project_root, "build", "ios", "ipa")
 end
@@ -245,16 +226,15 @@ def required_env(name)
   value
 end
 
-# `version: 0.1.0+1` in pubspec.yaml -> "0.1.0". The build number after `+` is
-# ignored; App Store Connect is the source of truth for it.
-def flutter_build_name
-  pubspec = File.read(File.join(project_root, "pubspec.yaml"))
-  name = pubspec[/^version:\s*([^\s+]+)/, 1]
-  UI.user_error!("Could not read `version:` from pubspec.yaml.") if name.nil?
+# Read the native target's MARKETING_VERSION. The build number is supplied by
+# App Store Connect.
+def marketing_version
+  project = File.read(File.join(project_root, "ios", "Runner.xcodeproj", "project.pbxproj"))
+  name = project[/MARKETING_VERSION = ([^;]+);/, 1]
+  UI.user_error!("Could not read MARKETING_VERSION from the Xcode project.") if name.nil?
   name
 end
 
-# Flutter names the IPA after the Xcode scheme/product, so glob rather than guess.
 def locate_ipa
   candidates = Dir.glob(File.join(project_root, "build", "ios", "ipa", "*.ipa"))
   UI.user_error!("No .ipa found in build/ios/ipa.") if candidates.empty?
