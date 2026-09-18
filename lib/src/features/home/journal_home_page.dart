@@ -568,6 +568,7 @@ final class _JournalHomePageState extends State<JournalHomePage> {
         child: RefreshIndicator(
           onRefresh: _reload,
           child: ListView(
+            key: const ValueKey<String>('journal-list'),
             padding: const EdgeInsets.all(24),
             children: <Widget>[
               _explainerCard(),
