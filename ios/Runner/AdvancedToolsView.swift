@@ -20,7 +20,7 @@ struct AdvancedToolsView: View {
                         message = "Could not create the backup."
                     }
                 } label: {
-                    Label("Create local backup (JSON + CSV)", systemImage: "square.and.arrow.down")
+                    Label("Create local backup (photos + JSON + CSV)", systemImage: "square.and.arrow.down")
                 }
                 if let exportURL {
                     ShareLink(item: exportURL) {
@@ -31,11 +31,11 @@ struct AdvancedToolsView: View {
             }
 
             Section("Restore") {
-                Text("Import replaces the current library after you confirm. Keep an export of the current library first.")
+                Text("Import replaces the current library. Keep an export of the current library first.")
                 Button {
                     showingImporter = true
                 } label: {
-                    Label("Choose JSON backup", systemImage: "doc.badge.plus")
+                    Label("Choose Cutting Log backup", systemImage: "doc.badge.plus")
                 }
             }
 
@@ -57,7 +57,7 @@ struct AdvancedToolsView: View {
         .navigationTitle("Advanced data tools")
         .fileImporter(
             isPresented: $showingImporter,
-            allowedContentTypes: [.json],
+            allowedContentTypes: [.folder],
             allowsMultipleSelection: false
         ) { result in
             do {

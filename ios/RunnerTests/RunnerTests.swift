@@ -76,4 +76,49 @@ final class RunnerTests: XCTestCase {
         XCTAssertEqual(store.cuttings(for: plant.id).first?.name, "Cutting 1")
         XCTAssertEqual(store.cuttings(for: plant.id).first?.tags, ["fast", "window"])
     }
+
+    @MainActor
+    func testStoreRejectsBackwardStageAndConflictingOutcome() {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = JournalStore(rootURL: root)
+        store.createPlant(nickname: "Pothos", species: "", notes: "", icon: "leaf")
+        let plant = try! XCTUnwrap(store.activePlants.first)
+        store.createCutting(
+            plantID: plant.id,
+            name: "Cutting",
+            method: "Stem",
+            medium: "Water",
+            location: "",
+            tags: "",
+            startedAt: Date(),
+            initialNote: ""
+        )
+        let cutting = try! XCTUnwrap(store.cuttings(for: plant.id).first)
+
+        store.changeStage(for: cutting.id, to: .rooting)
+        store.changeStage(for: cutting.id, to: .started)
+        XCTAssertEqual(store.library.state(for: cutting.id).stage, .rooting)
+
+        store.recordOutcome(for: cutting.id, outcome: .potted)
+        store.recordOutcome(for: cutting.id, outcome: .unsuccessful)
+        XCTAssertEqual(store.library.state(for: cutting.id).outcome, .potted)
+    }
+
+    @MainActor
+    func testCorruptLibraryIsPreservedAndBlocksWrites() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let libraryURL = root.appendingPathComponent("library.json")
+        let corruptData = Data("not json".utf8)
+        try corruptData.write(to: libraryURL)
+
+        let store = JournalStore(rootURL: root)
+        store.createPlant(nickname: "Must not save", species: "", notes: "", icon: "leaf")
+
+        XCTAssertTrue(store.activePlants.isEmpty)
+        XCTAssertEqual(try Data(contentsOf: libraryURL), corruptData)
+        XCTAssertNotNil(store.errorMessage)
+    }
 }

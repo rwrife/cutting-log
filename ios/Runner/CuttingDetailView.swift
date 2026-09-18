@@ -55,15 +55,20 @@ struct CuttingDetailView: View {
                         Text(event.occurredAt.formatted(date: .abbreviated, time: .shortened))
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        if let image = store.image(for: event) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(maxHeight: 240)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                            if !event.photoCaption.isEmpty { Text(event.photoCaption).font(.caption) }
+                        ForEach(event.photos) { photo in
+                            if let image = store.image(for: photo) {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxHeight: 240)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                if !photo.caption.isEmpty { Text(photo.caption).font(.caption) }
+                            } else {
+                                Label("Photo file is missing", systemImage: "photo.badge.exclamationmark")
+                                    .foregroundStyle(.secondary)
+                            }
                             Button("Remove photo", role: .destructive) {
-                                store.deletePhoto(from: event.id)
+                                store.deletePhoto(photo, from: event.id)
                             }
                         }
                     }
@@ -129,7 +134,7 @@ struct CuttingDetailView: View {
             }
         }
         .navigationTitle(cutting.name)
-        .onChange(of: photoItem) { item in
+        .onChange(of: photoItem) { _, item in
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self),
@@ -141,7 +146,7 @@ struct CuttingDetailView: View {
                 photoItem = nil
             }
         }
-        .onChange(of: cameraImage) { image in
+        .onChange(of: cameraImage) { _, image in
             if let image, let latest = events.last {
                 store.attachPhoto(image, caption: photoCaption, to: latest.id)
                 photoCaption = ""

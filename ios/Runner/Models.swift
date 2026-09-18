@@ -49,8 +49,13 @@ struct JournalEvent: Codable, Identifiable, Hashable {
     var stage: CuttingStage?
     var outcome: CuttingOutcome?
     var correctsEventID: UUID?
-    var photoPath: String?
-    var photoCaption: String = ""
+    var photos: [PhotoAttachment] = []
+}
+
+struct PhotoAttachment: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var path: String
+    var caption: String = ""
 }
 
 struct CheckIn: Codable, Identifiable, Hashable {
@@ -87,7 +92,7 @@ extension JournalLibrary {
         let history = events(for: cuttingID)
         let superseded = Set(history.compactMap(\.correctsEventID))
         return history.filter { !superseded.contains($0.id) }.reduce(into: CuttingState()) { state, event in
-            if event.kind == .stage, let stage = event.stage, stage.index >= state.stage.index {
+            if event.kind == .stage, let stage = event.stage, stage.order >= state.stage.order {
                 state.stage = stage
             } else if event.kind == .outcome, let outcome = event.outcome {
                 state.outcome = outcome
@@ -96,6 +101,6 @@ extension JournalLibrary {
     }
 }
 
-private extension CuttingStage {
-    var index: Int { Self.allCases.firstIndex(of: self) ?? 0 }
+extension CuttingStage {
+    var order: Int { Self.allCases.firstIndex(of: self) ?? 0 }
 }

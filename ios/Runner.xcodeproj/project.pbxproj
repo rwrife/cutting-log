@@ -7,7 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		06E4105330259EB8A31CBA24 /* LegacyMigrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E2BC0689C9B84ABDF472FA6 /* LegacyMigrator.swift */; };
 		0C8C84B58231A007380C283C /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF03B38C2EE7AD19DB07A264 /* HelpView.swift */; };
+		3FD3EEA6A330331F3B586649 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 5FE4F946D28C287F0E99F457 /* libsqlite3.tbd */; };
 		536A910335EF32E4815BBB32 /* CuttingLogApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A37966C8B8799DF1CD00332 /* CuttingLogApp.swift */; };
 		547A3E4FEA6215C5FD735274 /* AdvancedToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A67C5D7798BF317A02E4F153 /* AdvancedToolsView.swift */; };
 		60BF8E4A9EE44FEFF010DF36 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CAF6B4EBF3A9C45B125D49D2 /* Assets.xcassets */; };
@@ -36,13 +38,14 @@
 		2E49A50AB6B18B45B88C0515 /* HomeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		3426CBB284A4D684D21599F8 /* RunnerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		4A37966C8B8799DF1CD00332 /* CuttingLogApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CuttingLogApp.swift; sourceTree = "<group>"; };
+		5FE4F946D28C287F0E99F457 /* libsqlite3.tbd */ = {isa = PBXFileReference; includeInIndex = 1; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		63AB46E7332B3C654F7FC269 /* Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Runner.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9E2BC0689C9B84ABDF472FA6 /* LegacyMigrator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LegacyMigrator.swift; sourceTree = "<group>"; };
 		A67C5D7798BF317A02E4F153 /* AdvancedToolsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AdvancedToolsView.swift; sourceTree = "<group>"; };
 		A92CCF10AE41786F09ED7594 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C65C8301BFC4F6AD53052138 /* Models.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		CAF6B4EBF3A9C45B125D49D2 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CC02A8EFA0F335AAFB8F4F6A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		E08A866A9B513613DFDF5FA8 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		EF03B38C2EE7AD19DB07A264 /* HelpView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -58,6 +61,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3FD3EEA6A330331F3B586649 /* libsqlite3.tbd in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -77,6 +81,7 @@
 				CAF6B4EBF3A9C45B125D49D2 /* Assets.xcassets */,
 				283B76BD67738E0E1BBE8418 /* LaunchScreen.storyboard */,
 				CC02A8EFA0F335AAFB8F4F6A /* Info.plist */,
+				9E2BC0689C9B84ABDF472FA6 /* LegacyMigrator.swift */,
 			);
 			name = Runner;
 			path = Runner;
@@ -100,12 +105,21 @@
 			path = RunnerTests;
 			sourceTree = "<group>";
 		};
+		9A8B24FB450899A49FFED62C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				5FE4F946D28C287F0E99F457 /* libsqlite3.tbd */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		C10DFBC6EFCC79E732249D0F = {
 			isa = PBXGroup;
 			children = (
 				4C995FE47617AD5813A91343 /* Products */,
 				125E6D8A3538DD62817BA734 /* Runner */,
 				53C49F6C876F7B9A92135800 /* RunnerTests */,
+				9A8B24FB450899A49FFED62C /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -208,6 +222,7 @@
 				F19C844070BAAC7ABEF4624B /* CuttingDetailView.swift in Sources */,
 				547A3E4FEA6215C5FD735274 /* AdvancedToolsView.swift in Sources */,
 				0C8C84B58231A007380C283C /* HelpView.swift in Sources */,
+				06E4105330259EB8A31CBA24 /* LegacyMigrator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -366,7 +381,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -381,6 +395,7 @@
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				VALIDATE_PRODUCT = YES;
@@ -406,7 +421,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -421,6 +435,7 @@
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};

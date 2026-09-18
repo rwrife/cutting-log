@@ -11,7 +11,7 @@ Cutting Log is a private, local-first iPhone journal for tracking plant propagat
 - In-app check-ins with optional local notifications
 - Search across plants, cuttings, and tags
 - Sibling cutting summaries
-- User-initiated JSON backup, CSV exports, restore, archive, and full-library erase
+- User-initiated photo-backed backup packages, CSV exports, restore, archive, and full-library erase
 - No accounts, analytics, ads, network service, or Android/iPad support
 
 ## Platform

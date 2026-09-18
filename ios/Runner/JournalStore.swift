@@ -11,6 +11,7 @@ final class JournalStore: ObservableObject {
     private let rootURL: URL
     private let libraryURL: URL
     private let mediaURL: URL
+    private var storageBlocked = false
 
     init(rootURL: URL? = nil) {
         let root = rootURL ?? FileManager.default.urls(
@@ -20,11 +21,36 @@ final class JournalStore: ObservableObject {
         self.rootURL = root
         libraryURL = root.appendingPathComponent("library.json")
         mediaURL = root.appendingPathComponent("Media", isDirectory: true)
-        library = Self.load(from: libraryURL)
+        if FileManager.default.fileExists(atPath: libraryURL.path) {
+            if let loaded = Self.load(from: libraryURL) {
+                library = loaded
+            } else {
+                library = JournalLibrary()
+                storageBlocked = true
+            }
+        } else {
+            let legacyURL = root.deletingLastPathComponent().appendingPathComponent("cutting-log.sqlite")
+            do {
+                library = try LegacyMigrator.migrate(
+                    databaseURL: legacyURL,
+                    supportURL: root.deletingLastPathComponent(),
+                    mediaURL: root.appendingPathComponent("Media", isDirectory: true)
+                )
+            } catch {
+                library = JournalLibrary()
+                storageBlocked = true
+            }
+        }
         do {
             try FileManager.default.createDirectory(at: mediaURL, withIntermediateDirectories: true)
+            if !storageBlocked, !FileManager.default.fileExists(atPath: libraryURL.path), library != JournalLibrary() {
+                try write(library)
+            }
         } catch {
             errorMessage = "Could not prepare private storage."
+        }
+        if storageBlocked {
+            errorMessage = "The local journal file could not be read. It was preserved; restore a backup or erase the library to continue."
         }
     }
 
@@ -38,6 +64,7 @@ final class JournalStore: ObservableObject {
     }
 
     func createPlant(nickname: String, species: String, notes: String, icon: String) {
+        guard isWritable else { return }
         let name = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name.count <= 80 else {
             errorMessage = "Parent nickname must contain 1–80 characters."
@@ -57,6 +84,7 @@ final class JournalStore: ObservableObject {
         startedAt: Date,
         initialNote: String
     ) {
+        guard isWritable else { return }
         let siblings = cuttings(for: plantID)
         let proposed = name.trimmed
         let finalName = proposed.isEmpty ? nextCuttingName(in: siblings) : proposed
@@ -88,6 +116,7 @@ final class JournalStore: ObservableObject {
     }
 
     func addObservation(to cuttingID: UUID, note: String) {
+        guard isWritable else { return }
         let value = note.trimmed
         guard !value.isEmpty, value.count <= 10_000 else {
             errorMessage = "Observation must contain 1–10,000 characters."
@@ -98,8 +127,14 @@ final class JournalStore: ObservableObject {
     }
 
     func changeStage(for cuttingID: UUID, to stage: CuttingStage) {
-        guard library.state(for: cuttingID).outcome == .active else {
+        guard isWritable else { return }
+        let state = library.state(for: cuttingID)
+        guard state.outcome == .active else {
             errorMessage = "A stage cannot change after a final outcome."
+            return
+        }
+        guard stage.order >= state.stage.order else {
+            errorMessage = "A stage cannot move backward."
             return
         }
         library.events.append(JournalEvent(cuttingID: cuttingID, kind: .stage, stage: stage))
@@ -107,50 +142,56 @@ final class JournalStore: ObservableObject {
     }
 
     func recordOutcome(for cuttingID: UUID, outcome: CuttingOutcome) {
+        guard isWritable else { return }
+        let current = library.state(for: cuttingID).outcome
+        guard current == .active || current == outcome else {
+            errorMessage = "A final outcome can only be changed with a correction."
+            return
+        }
         library.events.append(JournalEvent(cuttingID: cuttingID, kind: .outcome, outcome: outcome))
         persist()
     }
 
     func correct(_ event: JournalEvent, note: String) {
+        guard isWritable else { return }
         var replacement = event
         replacement.id = UUID()
         replacement.createdAt = Date()
         replacement.note = note.trimmed
         replacement.correctsEventID = event.id
-        replacement.photoPath = nil
+        replacement.photos = []
         library.events.append(replacement)
         persist()
     }
 
     func attachPhoto(_ image: UIImage, caption: String, to eventID: UUID) {
+        guard isWritable else { return }
         guard let data = image.jpegData(compressionQuality: 0.85),
               let index = library.events.firstIndex(where: { $0.id == eventID }) else { return }
         let name = "\(UUID().uuidString).jpg"
         do {
             try data.write(to: mediaURL.appendingPathComponent(name), options: .atomic)
-            library.events[index].photoPath = name
-            library.events[index].photoCaption = caption.trimmed
+            library.events[index].photos.append(PhotoAttachment(path: name, caption: caption.trimmed))
             persist()
         } catch {
             errorMessage = "Could not copy the photo into private storage."
         }
     }
 
-    func image(for event: JournalEvent) -> UIImage? {
-        guard let path = event.photoPath else { return nil }
-        return UIImage(contentsOfFile: mediaURL.appendingPathComponent(path).path)
+    func image(for photo: PhotoAttachment) -> UIImage? {
+        UIImage(contentsOfFile: mediaURL.appendingPathComponent(photo.path).path)
     }
 
-    func deletePhoto(from eventID: UUID) {
-        guard let index = library.events.firstIndex(where: { $0.id == eventID }),
-              let path = library.events[index].photoPath else { return }
-        try? FileManager.default.removeItem(at: mediaURL.appendingPathComponent(path))
-        library.events[index].photoPath = nil
-        library.events[index].photoCaption = ""
+    func deletePhoto(_ photo: PhotoAttachment, from eventID: UUID) {
+        guard isWritable else { return }
+        guard let index = library.events.firstIndex(where: { $0.id == eventID }) else { return }
+        try? FileManager.default.removeItem(at: mediaURL.appendingPathComponent(photo.path))
+        library.events[index].photos.removeAll { $0.id == photo.id }
         persist()
     }
 
     func scheduleCheckIn(for cuttingID: UUID, at date: Date) async {
+        guard isWritable else { return }
         let center = UNUserNotificationCenter.current()
         let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
         let checkIn = CheckIn(cuttingID: cuttingID, scheduledAt: date)
@@ -174,6 +215,7 @@ final class JournalStore: ObservableObject {
     }
 
     func complete(_ checkIn: CheckIn) {
+        guard isWritable else { return }
         guard let index = library.checkIns.firstIndex(where: { $0.id == checkIn.id }) else { return }
         library.checkIns[index].completedAt = Date()
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [checkIn.id.uuidString])
@@ -181,17 +223,20 @@ final class JournalStore: ObservableObject {
     }
 
     func snooze(_ checkIn: CheckIn) async {
+        guard isWritable else { return }
         remove(checkIn)
         await scheduleCheckIn(for: checkIn.cuttingID, at: Date().addingTimeInterval(86_400))
     }
 
     func remove(_ checkIn: CheckIn) {
+        guard isWritable else { return }
         library.checkIns.removeAll { $0.id == checkIn.id }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [checkIn.id.uuidString])
         persist()
     }
 
     func archive(_ cutting: Cutting) {
+        guard isWritable else { return }
         guard let index = library.cuttings.firstIndex(where: { $0.id == cutting.id }) else { return }
         library.cuttings[index].archivedAt = Date()
         persist()
@@ -203,8 +248,17 @@ final class JournalStore: ObservableObject {
         try FileManager.default.createDirectory(at: exports, withIntermediateDirectories: true)
         let formatter = ISO8601DateFormatter()
         let stamp = formatter.string(from: Date()).replacingOccurrences(of: ":", with: "-")
-        let backup = exports.appendingPathComponent("cutting-log-\(stamp).json")
-        try Self.encoder.encode(library).write(to: backup, options: .atomic)
+        let backup = exports.appendingPathComponent("cutting-log-\(stamp).cuttinglog", isDirectory: true)
+        try? FileManager.default.removeItem(at: backup)
+        try FileManager.default.createDirectory(at: backup, withIntermediateDirectories: true)
+        try Self.encoder.encode(library).write(
+            to: backup.appendingPathComponent("library.json"),
+            options: .atomic
+        )
+        let backupMedia = backup.appendingPathComponent("Media", isDirectory: true)
+        if FileManager.default.fileExists(atPath: mediaURL.path) {
+            try FileManager.default.copyItem(at: mediaURL, to: backupMedia)
+        }
         try writeCSVs(to: exports)
         return backup
     }
@@ -212,16 +266,46 @@ final class JournalStore: ObservableObject {
     func importBackup(from url: URL) throws {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
-        guard values.isRegularFile == true, (values.fileSize ?? 0) <= 50_000_000 else {
+        let values = try url.resourceValues(forKeys: [.isDirectoryKey])
+        guard values.isDirectory == true else { throw CocoaError(.fileReadCorruptFile) }
+        try Self.validatePackageRoot(url)
+        let source = url.appendingPathComponent("library.json")
+        let sourceValues = try source.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        guard sourceValues.isRegularFile == true, (sourceValues.fileSize ?? 0) <= 50_000_000 else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        let imported = try Self.decoder.decode(JournalLibrary.self, from: Data(contentsOf: url))
+        let imported = try Self.decoder.decode(JournalLibrary.self, from: Data(contentsOf: source))
         guard imported.schemaVersion == 1, Self.isValid(imported) else {
             throw CocoaError(.fileReadCorruptFile)
         }
+        let stagedMedia = rootURL.appendingPathComponent("Media.restore", isDirectory: true)
+        try? FileManager.default.removeItem(at: stagedMedia)
+        let importedMedia = url.appendingPathComponent("Media", isDirectory: true)
+        if FileManager.default.fileExists(atPath: importedMedia.path) {
+            try Self.validateMediaDirectory(importedMedia, library: imported)
+            try FileManager.default.copyItem(at: importedMedia, to: stagedMedia)
+        } else {
+            try FileManager.default.createDirectory(at: stagedMedia, withIntermediateDirectories: true)
+        }
+        let previousMedia = rootURL.appendingPathComponent("Media.previous", isDirectory: true)
+        try? FileManager.default.removeItem(at: previousMedia)
+        if FileManager.default.fileExists(atPath: mediaURL.path) {
+            try FileManager.default.moveItem(at: mediaURL, to: previousMedia)
+        }
+        do {
+            try FileManager.default.moveItem(at: stagedMedia, to: mediaURL)
+            try write(imported)
+            try? FileManager.default.removeItem(at: previousMedia)
+        } catch {
+            try? FileManager.default.removeItem(at: mediaURL)
+            if FileManager.default.fileExists(atPath: previousMedia.path) {
+                try? FileManager.default.moveItem(at: previousMedia, to: mediaURL)
+            }
+            throw error
+        }
         library = imported
-        persist()
+        storageBlocked = false
+        errorMessage = nil
     }
 
     func eraseLibrary() {
@@ -229,17 +313,34 @@ final class JournalStore: ObservableObject {
         try? FileManager.default.removeItem(at: rootURL)
         try? FileManager.default.createDirectory(at: mediaURL, withIntermediateDirectories: true)
         library = JournalLibrary()
+        storageBlocked = false
         persist()
     }
 
     private func persist() {
+        guard !storageBlocked else {
+            errorMessage = "Restore a backup or erase the unreadable library before making changes."
+            return
+        }
         do {
-            try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
-            try Self.encoder.encode(library).write(to: libraryURL, options: .atomic)
+            try write(library)
             errorMessage = nil
         } catch {
             errorMessage = "Could not save changes to private storage."
         }
+    }
+
+    private var isWritable: Bool {
+        guard !storageBlocked else {
+            errorMessage = "Restore a backup or erase the unreadable library before making changes."
+            return false
+        }
+        return true
+    }
+
+    private func write(_ value: JournalLibrary) throws {
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        try Self.encoder.encode(value).write(to: libraryURL, options: .atomic)
     }
 
     private func nextCuttingName(in siblings: [Cutting]) -> String {
@@ -268,10 +369,10 @@ final class JournalStore: ObservableObject {
         "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
     }
 
-    private static func load(from url: URL) -> JournalLibrary {
+    private static func load(from url: URL) -> JournalLibrary? {
         guard let data = try? Data(contentsOf: url),
               let library = try? decoder.decode(JournalLibrary.self, from: data) else {
-            return JournalLibrary()
+            return nil
         }
         return library
     }
@@ -290,13 +391,64 @@ final class JournalStore: ObservableObject {
             return false
         }
         return library.events.allSatisfy { event in
-            let validPhotoPath = event.photoPath.map {
-                !$0.isEmpty && $0 != "." && $0 != ".." && !$0.contains("/") && !$0.contains("\\")
-            } ?? true
+            let validPhotoPaths = event.photos.allSatisfy {
+                let path = $0.path
+                return !path.isEmpty && path != "." && path != ".."
+                    && !path.contains("/") && !path.contains("\\")
+            }
             let validCorrection = event.correctsEventID.map { targetID in
                 library.events.contains { $0.id == targetID && $0.cuttingID == event.cuttingID }
             } ?? true
-            return validPhotoPath && validCorrection
+            return validPhotoPaths && validCorrection
+        }
+    }
+
+    private static func validateMediaDirectory(_ directory: URL, library: JournalLibrary) throws {
+        let expected = Set(library.events.flatMap(\.photos).map(\.path))
+        let files = try FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey],
+            options: []
+        )
+        var totalSize = 0
+        for file in files {
+            let values = try file.resourceValues(
+                forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]
+            )
+            guard values.isRegularFile == true, values.isSymbolicLink != true,
+                  expected.contains(file.lastPathComponent) else {
+                throw CocoaError(.fileReadCorruptFile)
+            }
+            totalSize += values.fileSize ?? 0
+            guard totalSize <= 500_000_000 else {
+                throw CocoaError(.fileReadTooLarge)
+            }
+        }
+        guard expected.isSubset(of: Set(files.map(\.lastPathComponent))) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+    }
+
+    private static func validatePackageRoot(_ directory: URL) throws {
+        let entries = try FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey],
+            options: []
+        )
+        guard Set(entries.map(\.lastPathComponent)).isSubset(of: ["library.json", "Media"]) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        for entry in entries {
+            let values = try entry.resourceValues(
+                forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey]
+            )
+            guard values.isSymbolicLink != true else { throw CocoaError(.fileReadCorruptFile) }
+            if entry.lastPathComponent == "library.json", values.isRegularFile != true {
+                throw CocoaError(.fileReadCorruptFile)
+            }
+            if entry.lastPathComponent == "Media", values.isDirectory != true {
+                throw CocoaError(.fileReadCorruptFile)
+            }
         }
     }
 
