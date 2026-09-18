@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import UIKit
 import UserNotifications
@@ -211,8 +212,12 @@ final class JournalStore: ObservableObject {
     func importBackup(from url: URL) throws {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        guard values.isRegularFile == true, (values.fileSize ?? 0) <= 50_000_000 else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
         let imported = try Self.decoder.decode(JournalLibrary.self, from: Data(contentsOf: url))
-        guard imported.schemaVersion == 1 else {
+        guard imported.schemaVersion == 1, Self.isValid(imported) else {
             throw CocoaError(.fileReadCorruptFile)
         }
         library = imported
@@ -269,6 +274,30 @@ final class JournalStore: ObservableObject {
             return JournalLibrary()
         }
         return library
+    }
+
+    private static func isValid(_ library: JournalLibrary) -> Bool {
+        let plantIDs = Set(library.plants.map(\.id))
+        let cuttingIDs = Set(library.cuttings.map(\.id))
+        let eventIDs = Set(library.events.map(\.id))
+        guard plantIDs.count == library.plants.count,
+              cuttingIDs.count == library.cuttings.count,
+              eventIDs.count == library.events.count,
+              Set(library.checkIns.map(\.id)).count == library.checkIns.count,
+              library.cuttings.allSatisfy({ plantIDs.contains($0.plantID) }),
+              library.events.allSatisfy({ cuttingIDs.contains($0.cuttingID) }),
+              library.checkIns.allSatisfy({ cuttingIDs.contains($0.cuttingID) }) else {
+            return false
+        }
+        return library.events.allSatisfy { event in
+            let validPhotoPath = event.photoPath.map {
+                !$0.isEmpty && $0 != "." && $0 != ".." && !$0.contains("/") && !$0.contains("\\")
+            } ?? true
+            let validCorrection = event.correctsEventID.map { targetID in
+                library.events.contains { $0.id == targetID && $0.cuttingID == event.cuttingID }
+            } ?? true
+            return validPhotoPath && validCorrection
+        }
     }
 
     private static let encoder: JSONEncoder = {
