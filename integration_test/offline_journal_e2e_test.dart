@@ -517,7 +517,12 @@ Future<bool> _waitForVisible(
   required int maxSeconds,
 }) async {
   final deadline = DateTime.now().add(Duration(seconds: maxSeconds));
-  final scrollable = find.byType(Scrollable).first;
+  final scrollable = find
+      .descendant(
+        of: find.byKey(const ValueKey<String>('journal-list')),
+        matching: find.byType(Scrollable),
+      )
+      .first;
   while (DateTime.now().isBefore(deadline)) {
     if (finder.evaluate().isNotEmpty) return true;
     if (scrollable.evaluate().isNotEmpty) {
