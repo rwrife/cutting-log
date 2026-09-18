@@ -824,27 +824,6 @@ final class _JournalHomePageState extends State<JournalHomePage> {
           icon: const Icon(Icons.calendar_today_outlined),
           label: Text('Start date: ${_date(_startedAt)}'),
         ),
-        MenuAnchor(
-          builder: (context, controller, child) => OutlinedButton.icon(
-            onPressed: _saving || _cutting == null || _mediaWorkflow == null
-                ? null
-                : controller.open,
-            icon: const Icon(Icons.add_a_photo_outlined),
-            label: const Text('Add photo (optional)'),
-          ),
-          menuChildren: <Widget>[
-            MenuItemButton(
-              onPressed: () =>
-                  _attachPhotoToLatestEvent(PhotoImportSource.photoLibrary),
-              child: const Text('From photo library'),
-            ),
-            MenuItemButton(
-              onPressed: () =>
-                  _attachPhotoToLatestEvent(PhotoImportSource.camera),
-              child: const Text('Use camera'),
-            ),
-          ],
-        ),
         FilledButton(
           key: const ValueKey<String>('start-cutting'),
           onPressed: _saving ? null : _createCutting,
@@ -880,6 +859,27 @@ final class _JournalHomePageState extends State<JournalHomePage> {
         ),
         const SizedBox(height: 12),
         _field(_photoCaption, 'Photo caption (optional)', maxLines: 2),
+        MenuAnchor(
+          builder: (context, controller, child) => OutlinedButton.icon(
+            onPressed: _saving || _mediaWorkflow == null
+                ? null
+                : controller.open,
+            icon: const Icon(Icons.add_a_photo_outlined),
+            label: const Text('Add photo (optional)'),
+          ),
+          menuChildren: <Widget>[
+            MenuItemButton(
+              onPressed: () =>
+                  _attachPhotoToLatestEvent(PhotoImportSource.photoLibrary),
+              child: const Text('From photo library'),
+            ),
+            MenuItemButton(
+              onPressed: () =>
+                  _attachPhotoToLatestEvent(PhotoImportSource.camera),
+              child: const Text('Use camera'),
+            ),
+          ],
+        ),
         if (_events.isEmpty)
           const Text('No timeline events yet.')
         else
