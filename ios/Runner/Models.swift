@@ -1,18 +1,18 @@
 import Foundation
 
-enum CuttingStage: String, Codable, CaseIterable, Identifiable {
+enum CuttingStage: String, Codable, CaseIterable, Hashable, Identifiable {
     case started, callusing, rooting, transferred
     var id: Self { self }
     var title: String { rawValue.capitalized }
 }
 
-enum CuttingOutcome: String, Codable, CaseIterable, Identifiable {
+enum CuttingOutcome: String, Codable, CaseIterable, Hashable, Identifiable {
     case active, potted, gifted, unsuccessful
     var id: Self { self }
     var title: String { rawValue.capitalized }
 }
 
-enum EventKind: String, Codable {
+enum EventKind: String, Codable, Hashable {
     case observation, stage, outcome
 }
 
