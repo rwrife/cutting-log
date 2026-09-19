@@ -1,5 +1,5 @@
 import XCTest
-@testable import Runner
+@testable import Cutting_Log
 
 final class RunnerTests: XCTestCase {
     func testDerivedStateUsesOrderedEvents() {
