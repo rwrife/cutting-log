@@ -33,7 +33,7 @@ jobs:
       - name: Build simulator app
         run: ./tool/build_ios.sh
       - name: Archive simulator app
-        run: ditto -c -k --sequesterRsrc --keepParent build/DerivedData/Build/Products/Debug-iphonesimulator/Cutting\\ Log.app build/CuttingLog.app.zip
+        run: ditto -c -k --sequesterRsrc --keepParent "build/DerivedData/Build/Products/Debug-iphonesimulator/Cutting Log.app" build/CuttingLog.app.zip
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cutting-log-ios-simulator
