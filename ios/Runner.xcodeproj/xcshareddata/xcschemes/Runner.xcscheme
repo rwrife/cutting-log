@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "D12C10D305A4D687BF17D0CE"
-               BuildableName = "Runner.app"
+               BuildableName = "Cutting Log.app"
                BlueprintName = "Runner"
                ReferencedContainer = "container:Runner.xcodeproj">
             </BuildableReference>
@@ -45,7 +45,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D12C10D305A4D687BF17D0CE"
-            BuildableName = "Runner.app"
+            BuildableName = "Cutting Log.app"
             BlueprintName = "Runner"
             ReferencedContainer = "container:Runner.xcodeproj">
          </BuildableReference>
@@ -78,7 +78,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D12C10D305A4D687BF17D0CE"
-            BuildableName = "Runner.app"
+            BuildableName = "Cutting Log.app"
             BlueprintName = "Runner"
             ReferencedContainer = "container:Runner.xcodeproj">
          </BuildableReference>
@@ -95,7 +95,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D12C10D305A4D687BF17D0CE"
-            BuildableName = "Runner.app"
+            BuildableName = "Cutting Log.app"
             BlueprintName = "Runner"
             ReferencedContainer = "container:Runner.xcodeproj">
          </BuildableReference>

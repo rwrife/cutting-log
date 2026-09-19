@@ -1,0 +1,45 @@
+Running `(cd /Users/ryrife/.pub-cache/hosted/pub.dev/objective_c-9.5.0/; TMPDIR=/var/folders/fg/d1v5byf92vq5x9nq2865b23m0000gn/T/ PATH=/Users/ryrife/.unity/bin:/Users/ryrife/.local/bin:/Users/ryrife/.nvm/versions/node/v22.22.3/bin:/Users/ryrife/Library/pnpm/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/opt/homebrew/bin HOME=/Users/ryrife /opt/homebrew/share/flutter/bin/cache/dart-sdk/bin/dart --packages=/Users/ryrife/projects/cutting-log/.dart_tool/package_config.json /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/objective_c/de310349bc/hook.dill --config=/Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/objective_c/de310349bc/input.json )`.
+INFO: 2026-09-17 20:20:28.481415: Using compiler /Library/Developer/CommandLineTools/usr/bin/clang from BuildInput.cCompiler.cc.
+
+INFO: 2026-09-17 20:20:28.486323: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -c /Users/ryrife/.pub-cache/hosted/pub.dev/objective_c-9.5.0/src/include/dart_api_dl.c -fpic -gline-tables-only -I src -o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/include/dart_api_dl.c.o
+
+INFO: 2026-09-17 20:20:28.487245: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -c /Users/ryrife/.pub-cache/hosted/pub.dev/objective_c-9.5.0/src/objective_c.c -fpic -gline-tables-only -I src -o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c.c.o
+
+INFO: 2026-09-17 20:20:28.487419: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -x objective-c -fobjc-arc -c /Users/ryrife/.pub-cache/hosted/pub.dev/objective_c-9.5.0/src/input_stream_adapter.m -fpic -gline-tables-only -I src -o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/input_stream_adapter.m.o
+
+INFO: 2026-09-17 20:20:28.487594: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -x objective-c -fobjc-arc -c /Users/ryrife/.pub-cache/hosted/pub.dev/objective_c-9.5.0/src/objective_c.m -fpic -gline-tables-only -I src -o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c.m.o
+
+INFO: 2026-09-17 20:20:28.487705: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -x objective-c -fobjc-arc -c /Users/ryrife/.pub-cache/hosted/pub.dev/objective_c-9.5.0/src/observer.m -fpic -gline-tables-only -I src -o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/observer.m.o
+
+INFO: 2026-09-17 20:20:28.487925: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -x objective-c -fobjc-arc -c /Users/ryrife/.pub-cache/hosted/pub.dev/objective_c-9.5.0/src/objective_c_bindings_generated.m -fpic -gline-tables-only -I src -o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c_bindings_generated.m.o
+
+/Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -x objective-c -fobjc-arc -c /Users/ryrife/.pub-cache/hosted/pub.dev/objective_c-9.5.0/src/protocol.m -fpic -gline-tables-only -I src -o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/protocol.m.o
+
+INFO: 2026-09-17 20:20:28.706604: 
+INFO: 2026-09-17 20:20:28.706612: 
+INFO: 2026-09-17 20:20:28.706622: Generated /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/include/dart_api_dl.c.o
+
+INFO: 2026-09-17 20:20:28.707026: 
+INFO: 2026-09-17 20:20:28.707046: 
+INFO: 2026-09-17 20:20:28.707054: Generated /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/protocol.m.o
+
+INFO: 2026-09-17 20:20:28.920681: 
+INFO: 2026-09-17 20:20:28.920715: 
+INFO: 2026-09-17 20:20:28.920723: Generated /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/ns_number.m.o
+
+INFO: 2026-09-17 20:20:28.928338: 
+INFO: 2026-09-17 20:20:28.928347: 
+INFO: 2026-09-17 20:20:28.928354: Generated /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c.m.o
+
+ter.m.o
+
+INFO: 2026-09-17 20:20:28.949546: 
+INFO: 2026-09-17 20:20:28.949577: 
+INFO: 2026-09-17 20:20:28.949586: Generated /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c_bindings_generated.m.o
+
+INFO: 2026-09-17 20:20:28.949819: Running: /Library/Developer/CommandLineTools/usr/bin/clang -shared -Wl,-encryptable -undefined dynamic_lookup -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/include/dart_api_dl.c.o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c.c.o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/input_stream_adapter.m.o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c.m.o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/observer.m.o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/ns_number.m.o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/protocol.m.o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c_bindings_generated.m.o -o /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/objective_c.dylib
+
+INFO: 2026-09-17 20:20:29.086610: 
+INFO: 2026-09-17 20:20:29.086661: 
+INFO: 2026-09-17 20:20:29.086672: Generated /Users/ryrife/projects/cutting-log/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/objective_c.dylib
+
