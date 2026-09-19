@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Select Xcode
         run: |
-          xcode="$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)"
+          xcode="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
           [ -n "$xcode" ] || xcode=/Applications/Xcode.app
           sudo xcode-select --switch "$xcode/Contents/Developer"
           major="$(xcodebuild -version | head -1 | cut -d' ' -f2 | cut -d. -f1)"

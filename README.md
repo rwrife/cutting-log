@@ -27,7 +27,10 @@ Open `ios/Runner.xcodeproj` in Xcode 16 or newer, or run:
 ./tool/build_ios.sh
 ```
 
-Set `IOS_TEST_DESTINATION` when the default `iPhone 16 Pro` simulator is unavailable.
+The test script selects an available iPhone simulator compatible with the selected
+Xcode. Set `IOS_TEST_DESTINATION` to test a specific device. If the system selects
+Command Line Tools instead of Xcode, set
+`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` when running the scripts.
 
 ## Privacy
 
