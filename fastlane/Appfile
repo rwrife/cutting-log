@@ -1,5 +1,4 @@
-# Fastlane lives at the Flutter project root, not under ios/, because the build is
-# driven by `flutter build ipa` which must run from the project root.
+# Fastlane lives at the repository root and builds the native Xcode project.
 
 app_identifier("com.infinityball.cuttinglog")
 

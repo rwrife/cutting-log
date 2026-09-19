@@ -1,15 +1,12 @@
-# Architecture boundaries
+# Architecture
 
-Cutting Log keeps dependencies pointing inward so the local-first core remains testable without a device.
+Cutting Log is a native SwiftUI iPhone app with no third-party runtime dependencies.
 
-| Boundary | Path | Responsibility |
-| --- | --- | --- |
-| Domain | `lib/src/domain/` | Framework-light entities, policies, repository ports, validation, and derived state. |
-| Application | `lib/src/application/` | Use cases and transaction orchestration. |
-| Data | `lib/src/data/` | Local database, repository adapters, migrations, IDs, clocks, and app-private files. |
-| Features | `lib/src/features/` | Accessible screens and controllers grouped by user workflow. |
-| Platform | `lib/src/platform/` | Injected adapters for optional notifications, media selection, sharing, and OS storage locations. |
+- `Models.swift` defines the Codable journal records and deterministic derived cutting state.
+- `JournalStore.swift` owns mutations, versioned JSON persistence, private photo files, notifications, CSV export, backup import, and deletion.
+- `HomeView.swift` provides journal search and parent/cutting capture.
+- `CuttingDetailView.swift` provides timelines, photos, stages, outcomes, corrections, and check-ins.
+- `AdvancedToolsView.swift` provides explicit export, restore, and erase controls.
+- `HelpView.swift` contains the offline guide and limitations.
 
-The composition root is `lib/main.dart`; shared app theming and routing begin in `lib/src/app.dart`. Domain and application code must not import Flutter UI or platform plugins. Platform access is introduced through narrow interfaces and must never be invoked during startup. Camera/photo and notification requests remain optional and user-initiated.
-
-The production composition root opens the versioned Drift database in the platform application-support directory and injects its `JournalDataRepository` adapter into capture/review/reminder/media workflows. Widget and application tests use the in-memory adapter; repository and restart tests use an isolated SQLite file. The portability workflow intentionally coordinates repository reads with Drift transactions for validated backup/restore and full-library erase; this is the only application-level path allowed to touch both the domain port and concrete database adapter. See [data-storage.md](data-storage.md) for timestamp, migration, ownership, and deletion boundaries and [export-schema-v1.json](export-schema-v1.json) for the backup schema.
+The `JournalStore` is injected with SwiftUI's environment and is the single source of truth.

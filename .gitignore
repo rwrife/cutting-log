@@ -1,27 +1,9 @@
-# Flutter / Dart
-.dart_tool/
-.packages
-.pub-cache/
-.pub/
 build/
 coverage/
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.flutter-plugins
-.flutter-plugins-dependencies
 
-# Android
-android/.gradle/
-android/local.properties
-android/**/GeneratedPluginRegistrant.java
-*.jks
-*.keystore
-key.properties
-
-# iOS / macOS
+# iOS
 **/Pods/
 **/.symlinks/
-**/Flutter/ephemeral/
 **/DerivedData/
 *.xcuserstate
 xcuserdata/
@@ -45,8 +27,6 @@ Thumbs.db
 artifacts/
 exports/
 test-results/
-*.apk
-*.aab
 *.ipa
 *.dSYM.zip
 
